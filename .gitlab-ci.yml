@@ -21,8 +21,8 @@ build_assets:
   artifacts:
     paths:
       - node_modules/
-      - dist/
-      - dist-electron/
+      # - dist/
+      # - dist-electron/
 
 # Job for Linux build
 package_linux:
