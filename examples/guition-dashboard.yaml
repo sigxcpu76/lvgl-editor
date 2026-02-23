@@ -1,0 +1,650 @@
+substitutions:
+  name: "guition-dashboard"
+  friendly_name: "Guition Dashboard"
+  project_name: "guition.dashboard"
+  project_version: "1.0.0"
+  touchscreen_idle_timeout: 30s
+
+  # External Entities Substitutions
+  weather_entity: "weather.forecast_home"
+  temp_entity: "sensor.weather_station_outdoor_temperature"
+  hum_entity: "sensor.weather_station_humidity"
+  pv_entity: "sensor.deye_pv_power"
+  batt_entity: "sensor.can_battery_emulator_can_battery_emulator_state_of_charge"
+  cons_entity: "sensor.deye20_sun20k_load_totalpower"
+
+  btn1_entity: "light.office_lights_main"
+  btn1_icon: "\U000F0335" # lightbulb
+  btn1_label: "Office Main"
+  btn1_id: "lv_btn1"
+  btn2_entity: "light.alex_electronics_desk_lamp"
+  btn2_icon: "\U000F0335"
+  btn2_label: "Office Desk"
+  btn2_id: "lv_btn2"
+  btn3_entity: "light.office_outlet_corner_lights"
+  btn3_icon: "\U000F0335"
+  btn3_label: "Corner"
+  btn3_id: "lv_btn3"
+  btn4_entity: "switch.office_outlet_microscope"
+  btn4_icon: "\U000F0335"
+  btn4_label: "Microscope"
+  btn4_id: "lv_btn4"
+  btn5_entity: "switch.office_outlet_alex_desk_front_light"
+  btn5_icon: "\U000F0335"
+  btn5_label: "Front"
+  btn5_id: "lv_btn5"
+  btn6_entity: "light.office_lights_center"
+  btn6_icon: "\U000F0335"
+  btn6_label: "Office Center"
+  btn6_id: "lv_btn6"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  on_boot:
+    priority: 600
+    then:
+      - lvgl.page.show: main_page
+      - light.turn_on:
+          id: display_backlight
+          brightness: 100%
+
+packages:
+  hardware: !include modules/hardware/guition-esp32-s3-4848s040.yaml
+
+api:
+  encryption:
+    key: "h20t5tIVBsMYig03WGUWEiVEkzIuzBYCIPNBFPKZnto="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Guition-Fallback"
+
+logger:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time:
+      - seconds: 0
+        minutes: /1
+        then:
+          - lvgl.label.update:
+              id: lbl_clock
+              text: !lambda 'return id(ha_time).now().strftime("%H:%M");'
+          - lvgl.label.update:
+              id: lbl_date
+              text: !lambda 'return id(ha_time).now().strftime("%a, %d %b");'
+
+font:
+  - file: "Roboto-Regular.ttf"
+    id: font_reg_20
+    size: 20
+  - file: "Roboto-Regular.ttf"
+    id: font_reg_16
+    size: 16
+  - file: "Roboto-Bold.ttf"
+    id: font_bold_60
+    size: 60
+  - file: "Roboto-Bold.ttf"
+    id: font_bold_24
+    size: 24
+
+  - file: "materialdesignicons-webfont.ttf"
+    id: font_mdi_30
+    size: 30
+    glyphs:
+      - "\U000F0599" # sunny
+      - "\U000F0590" # cloudy
+      - "\U000F0595" # partly-cloudy
+      - "\U000F0597" # rainy
+      - "\U000F0593" # lightning
+      - "\U000F0591" # fog
+      - "\U000F059C" # weather-windy
+      - "\U000F0F36" # snowy
+      - "\U000F0594" # clear-night
+      - "\U000F0D88" # solar-power
+      - "\U000F0079" # battery
+      - "\U000F140B" # flash (consumption)
+      - "\U000F0335" # lightbulb
+      - "\U000F040A" # power-plug
+      - "\U000F02D1" # garage
+      - "\U000F033F" # lock
+      - "\U000F037A" # moon-waning-crescent
+      - "\U000F004D" # arrow-down-thin
+      - "\U000F005D" # arrow-up-thin
+      - "\U000F058F" # water-percent (humidity)
+      - "\U000F050F" # thermometer
+
+  - file: "materialdesignicons-webfont.ttf"
+    id: font_mdi_60
+    size: 60
+    glyphs:
+      - "\U000F0599" # sunny
+      - "\U000F0590" # cloudy
+      - "\U000F0595" # partly-cloudy
+      - "\U000F0597" # rainy
+      - "\U000F0593" # lightning
+      - "\U000F0591" # fog
+      - "\U000F059C" # weather-windy
+      - "\U000F0F36" # snowy
+      - "\U000F0594" # clear-night
+
+sensor:
+  - platform: homeassistant
+    entity_id: ${temp_entity}
+    id: sens_temp
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_temp
+            text: !lambda 'return to_string((int)x) + "°";'
+
+  - platform: homeassistant
+    entity_id: ${hum_entity}
+    id: sens_hum
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_hum
+            text: !lambda 'return to_string((int)x) + "%";'
+
+  - platform: homeassistant
+    entity_id: ${pv_entity}
+    id: sens_pv
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_pv
+            text: !lambda 'return to_string((int)x) + " W";'
+
+  - platform: homeassistant
+    entity_id: ${batt_entity}
+    id: sens_batt
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_batt
+            text: !lambda 'return to_string((int)x) + "%";'
+
+  - platform: homeassistant
+    entity_id: ${cons_entity}
+    id: sens_cons
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_cons
+            text: !lambda 'return to_string((int)x) + " W";'
+
+binary_sensor:
+  - platform: homeassistant
+    entity_id: ${btn1_entity}
+    id: btn1_state
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: ${btn1_id}
+            state:
+              checked: !lambda "return x;"
+
+  - platform: homeassistant
+    entity_id: ${btn2_entity}
+    id: btn2_state
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: ${btn2_id}
+            state:
+              checked: !lambda "return x;"
+
+  - platform: homeassistant
+    entity_id: ${btn3_entity}
+    id: btn3_state
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: ${btn3_id}
+            state:
+              checked: !lambda "return x;"
+
+  - platform: homeassistant
+    entity_id: ${btn4_entity}
+    id: btn4_state
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: ${btn4_id}
+            state:
+              checked: !lambda "return x;"
+
+  - platform: homeassistant
+    entity_id: ${btn5_entity}
+    id: btn5_state
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: ${btn5_id}
+            state:
+              checked: !lambda "return x;"
+
+  - platform: homeassistant
+    entity_id: ${btn6_entity}
+    id: btn6_state
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: ${btn6_id}
+            state:
+              checked: !lambda "return x;"
+
+text_sensor:
+  - platform: homeassistant
+    entity_id: ${weather_entity}
+    id: sens_weather
+    on_value:
+      then:
+        - lambda: |-
+            std::string state = x;
+            std::string icon = "\U000F0599"; // default sunny
+            if (state == "cloudy") icon = "\U000F0590";
+            else if (state == "partlycloudy") icon = "\U000F0595";
+            else if (state == "rainy") icon = "\U000F0597";
+            else if (state == "lightning") icon = "\U000F0593";
+            else if (state == "fog") icon = "\U000F0591";
+            else if (state == "snowy") icon = "\U000F0F36";
+            else if (state == "clear-night") icon = "\U000F0594";
+
+            lv_label_set_text(id(lbl_weather_icon), icon.c_str());
+
+lvgl:
+  log_level: DEBUG
+  displays: [my_display]
+  touchscreens: [my_touchscreen]
+  on_idle:
+    timeout: $touchscreen_idle_timeout
+    then:
+      light.turn_on:
+        id: display_backlight
+        brightness: 30%
+
+  style_definitions:
+    - id: style_card
+      bg_color: 0x1E1E1E
+      radius: 12
+      border_width: 0
+      pad_all: 10
+      shadow_width: 0
+
+    - id: style_btn
+      bg_color: 0x2D2D2D
+      radius: 8
+      border_width: 0
+      shadow_width: 0
+
+    - id: style_btn_checked
+      bg_color: 0x2196F3
+
+    - id: style_title
+      text_font: font_bold_24
+      text_color: 0xFFFFFF
+
+    - id: style_value
+      text_font: font_bold_24
+      text_color: 0xFFFFFF
+
+    - id: style_sub
+      text_font: font_reg_16
+      text_color: 0xAAAAAA
+
+  pages:
+    - id: main_page
+      bg_color: 0x000000
+      pad_all: 10
+      layout:
+        type: flex
+        flex_flow: column
+        pad_row: 10
+
+      widgets:
+        # HEADER: Clock & Date
+        - obj:
+            width: 100%
+            height: 80
+            styles: style_card
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: space_between
+              flex_align_cross: center
+            widgets:
+              - label:
+                  id: lbl_clock
+                  text: "00:00"
+                  text_font: font_bold_60
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_date
+                  text: "Mon, 01 Jan"
+                  text_font: font_bold_24
+                  text_color: 0xAAAAAA
+
+        # MAIN: Weather & Solar
+        - obj:
+            width: 100%
+            height: 140
+            bg_opa: 0 # transparent container
+            border_width: 0
+            pad_all: 0
+            layout:
+              type: flex
+              flex_flow: row
+              pad_column: 10
+
+            widgets:
+              # WEATHER CARD
+              - obj:
+                  flex_grow: 1
+                  height: 100%
+                  styles: style_card
+                  layout:
+                    type: flex
+                    flex_flow: row
+                    flex_align_main: space_evenly
+                    flex_align_cross: center
+                  widgets:
+                    - label:
+                        id: lbl_weather_icon
+                        text: "\U000F0599"
+                        text_font: font_mdi_60
+                        text_color: 0xFFEB3B # Yellow
+                    - obj:
+                        width: size_content
+                        height: size_content
+                        bg_opa: 0
+                        border_width: 0
+                        layout:
+                          type: flex
+                          flex_flow: column
+                          pad_row: 5
+                        widgets:
+                          - label:
+                              id: lbl_temp
+                              text: "--°"
+                              text_font: font_bold_24
+                              text_color: 0xFFFFFF
+                          - label:
+                              id: lbl_hum
+                              text: "--%"
+                              text_font: font_reg_20
+                              text_color: 0xAAAAAA
+
+              # SOLAR CARD
+              - obj:
+                  flex_grow: 1
+                  height: 100%
+                  styles: style_card
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: space_evenly
+                  widgets:
+                    # PV
+                    - obj:
+                        width: 100%
+                        height: size_content
+                        bg_opa: 0
+                        border_width: 0
+                        layout:
+                          type: flex
+                          flex_flow: row
+                          flex_align_main: space_between
+                        widgets:
+                          - label:
+                              text: "\U000F0D88" # solar
+                              text_font: font_mdi_30
+                              text_color: 0xFFEB3B
+                          - label:
+                              id: lbl_pv
+                              text: "0 W"
+                              styles: style_value
+                    # BATT
+                    - obj:
+                        width: 100%
+                        height: size_content
+                        bg_opa: 0
+                        border_width: 0
+                        layout:
+                          type: flex
+                          flex_flow: row
+                          flex_align_main: space_between
+                        widgets:
+                          - label:
+                              text: "\U000F0079" # battery
+                              text_font: font_mdi_30
+                              text_color: 0x4CAF50
+                          - label:
+                              id: lbl_batt
+                              text: "0 %"
+                              styles: style_value
+                    # CONS
+                    - obj:
+                        width: 100%
+                        height: size_content
+                        bg_opa: 0
+                        border_width: 0
+                        layout:
+                          type: flex
+                          flex_flow: row
+                          flex_align_main: space_between
+                        widgets:
+                          - label:
+                              text: "\U000F140B" # flash
+                              text_font: font_mdi_30
+                              text_color: 0xF44336
+                          - label:
+                              id: lbl_cons
+                              text: "0 W"
+                              styles: style_value
+
+        # FOOTER: Buttons Grid
+        - obj:
+            width: 100%
+            flex_grow: 1
+            bg_opa: 0
+            border_width: 0
+            pad_all: 0
+            layout:
+              type: grid
+              grid_columns: [148, 148, 148]
+              grid_rows: [100, 100]
+              pad_column: 6
+              pad_row: 6
+            widgets:
+              # BTN 1
+              - button:
+                  id: ${btn1_id}
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 0
+                  grid_cell_x_align: stretch
+                  grid_cell_y_align: stretch
+                  styles: style_btn
+                  checkable: true
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: center
+                    flex_align_cross: center
+                    pad_row: 5
+                  widgets:
+                    - label:
+                        text: "${btn1_icon}"
+                        text_font: font_mdi_30
+                        text_color: 0xFFFFFF
+                    - label:
+                        text: "${btn1_label}"
+                        text_font: font_reg_16
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - homeassistant.service:
+                        service: homeassistant.toggle
+                        data:
+                          entity_id: ${btn1_entity}
+              # BTN 2
+              - button:
+                  id: ${btn2_id}
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 0
+                  grid_cell_x_align: stretch
+                  grid_cell_y_align: stretch
+                  styles: style_btn
+                  checkable: true
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: center
+                    flex_align_cross: center
+                    pad_row: 5
+                  widgets:
+                    - label:
+                        text: "${btn2_icon}"
+                        text_font: font_mdi_30
+                        text_color: 0xFFFFFF
+                    - label:
+                        text: "${btn2_label}"
+                        text_font: font_reg_16
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - homeassistant.service:
+                        service: homeassistant.toggle
+                        data:
+                          entity_id: ${btn2_entity}
+              # BTN 3
+              - button:
+                  id: ${btn3_id}
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 0
+                  grid_cell_x_align: stretch
+                  grid_cell_y_align: stretch
+                  styles: style_btn
+                  checkable: true
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: center
+                    flex_align_cross: center
+                    pad_row: 5
+                  widgets:
+                    - label:
+                        text: "${btn3_icon}"
+                        text_font: font_mdi_30
+                        text_color: 0xFFFFFF
+                    - label:
+                        text: "${btn3_label}"
+                        text_font: font_reg_16
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - homeassistant.service:
+                        service: homeassistant.toggle
+                        data:
+                          entity_id: ${btn3_entity}
+              # BTN 4
+              - button:
+                  id: ${btn4_id}
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 1
+                  grid_cell_x_align: stretch
+                  grid_cell_y_align: stretch
+                  styles: style_btn
+                  checkable: true
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: center
+                    flex_align_cross: center
+                    pad_row: 5
+                  widgets:
+                    - label:
+                        text: "${btn4_icon}"
+                        text_font: font_mdi_30
+                        text_color: 0xFFFFFF
+                    - label:
+                        text: "${btn4_label}"
+                        text_font: font_reg_16
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - homeassistant.service:
+                        service: homeassistant.toggle
+                        data:
+                          entity_id: ${btn4_entity}
+              # BTN 5
+              - button:
+                  id: ${btn5_id}
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 1
+                  grid_cell_x_align: stretch
+                  grid_cell_y_align: stretch
+                  styles: style_btn
+                  checkable: true
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: center
+                    flex_align_cross: center
+                    pad_row: 5
+                  widgets:
+                    - label:
+                        text: "${btn5_icon}"
+                        text_font: font_mdi_30
+                        text_color: 0xFFFFFF
+                    - label:
+                        text: "${btn5_label}"
+                        text_font: font_reg_16
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - homeassistant.service:
+                        service: homeassistant.toggle
+                        data:
+                          entity_id: ${btn5_entity}
+              # BTN 6
+              - button:
+                  id: ${btn6_id}
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 1
+                  grid_cell_x_align: stretch
+                  grid_cell_y_align: stretch
+                  styles: style_btn
+                  checkable: true
+                  layout:
+                    type: flex
+                    flex_flow: column
+                    flex_align_main: center
+                    flex_align_cross: center
+                    pad_row: 5
+                  widgets:
+                    - label:
+                        text: "${btn6_icon}"
+                        text_font: font_mdi_30
+                        text_color: 0xFFFFFF
+                    - label:
+                        text: "${btn6_label}"
+                        text_font: font_reg_16
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - homeassistant.service:
+                        service: homeassistant.toggle
+                        data:
+                          entity_id: ${btn6_entity}
+
+touchscreen:
+  on_touch:
+    then:
+      - logger.log: "LVGL is active"
+      - lvgl.resume:
+      - light.turn_on:
+          id: display_backlight
+          brightness: 70%
