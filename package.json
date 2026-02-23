@@ -7,8 +7,41 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "package": "npm run build && electron-builder build --publish never",
     "lint": "eslint .",
     "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.example.lvgl-editor",
+    "productName": "LVGL Editor",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "dist",
+      "dist-electron"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "default",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   },
   "dependencies": {
     "lodash": "^4.17.21",
@@ -29,6 +62,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^40.6.0",
+    "electron-builder": "^26.8.1",
     "typescript": "~5.7.2",
     "vite": "^6.0.5",
     "vite-plugin-electron": "^0.29.0",

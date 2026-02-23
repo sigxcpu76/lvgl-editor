@@ -1,0 +1,69 @@
+stages:
+  - build
+  - package
+
+variables:
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .npm/
+    - node_modules/
+
+# Step to install dependencies and build the renderer/main processes
+build_assets:
+  stage: build
+  image: node:20
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - node_modules/
+      - dist/
+      - dist-electron/
+
+# Job for Linux build
+package_linux:
+  stage: package
+  image: electronuserland/builder:wine
+  script:
+    - npm run package -- --linux
+  artifacts:
+    name: "$CI_PROJECT_NAME-linux-$CI_COMMIT_REF_SLUG"
+    paths:
+      - release/
+  only:
+    - master
+    - tags
+
+# Job for Windows build (using Wine on Linux)
+package_windows:
+  stage: package
+  image: electronuserland/builder:wine
+  script:
+    - npm run package -- --win
+  artifacts:
+    name: "$CI_PROJECT_NAME-windows-$CI_COMMIT_REF_SLUG"
+    paths:
+      - release/
+  only:
+    - master
+    - tags
+
+# Job for macOS build
+# NOTE: Building for macOS on Linux has limitations (no signing/notarization).
+# If you have a macOS runner, it is highly recommended to use it by adding the appropriate tags.
+package_mac:
+  stage: package
+  image: electronuserland/builder:wine
+  script:
+    - npm run package -- --mac
+  artifacts:
+    name: "$CI_PROJECT_NAME-mac-$CI_COMMIT_REF_SLUG"
+    paths:
+      - release/
+  only:
+    - master
+    - tags
