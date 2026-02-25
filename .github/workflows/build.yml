@@ -1,0 +1,36 @@
+name: Build and Package LVGL Editor
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20" # Or your specific version
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      # We use 'package' here as it's your specific command
+      - name: Package application
+        run: npm run package
+        env:
+          NODE_ENV: production
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-app
+          path: dist/ # Change this to your actual output folder (e.g., 'out' or 'build')
