@@ -5,7 +5,7 @@
 
 A modern, desktop-based GUI editor for designing **ESPHome LVGL** interfaces. Build complex dashboards with drag-and-drop ease and export production-ready YAML in seconds.
 
-![Editor Preview](https://raw.githubusercontent.com/sigxcpu/lvgl-editor/main/screenshots/preview.png)
+![Editor Preview](https://raw.githubusercontent.com/sigxcpu/lvgl-editor/master/screenshots/preview.png)
 
 ## ✨ Features
 
