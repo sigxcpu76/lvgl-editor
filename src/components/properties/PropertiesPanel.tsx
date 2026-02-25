@@ -3,13 +3,14 @@ import { useStore } from '../../store';
 import { WidgetType, StyleProperties, WidgetNode } from '../../types';
 
 export const PropertiesPanel: React.FC = () => {
-    const { widgets, selectedId, updateWidget } = useStore();
+    const { widgets, selectedIds, updateWidget } = useStore();
+    const [activeState, setActiveState] = React.useState<string>('DEFAULT');
 
     const findSelectedWidget = (): WidgetNode | null => {
         let result: WidgetNode | null = null;
         const search = (nodes: WidgetNode[]) => {
             for (const node of nodes) {
-                if (node.id === selectedId) {
+                if (node.id === selectedIds[0]) {
                     result = node;
                     return;
                 }
@@ -37,17 +38,65 @@ export const PropertiesPanel: React.FC = () => {
     };
 
     const handleStyleChange = (key: keyof StyleProperties, value: any) => {
-        const currentStyles = selectedNode.styles || {};
-        updateWidget(selectedNode.id, {
-            styles: {
-                ...currentStyles,
-                [key]: value
+        if (activeState === 'DEFAULT') {
+            const currentStyles = selectedNode.styles || {};
+            updateWidget(selectedNode.id, {
+                styles: {
+                    ...currentStyles,
+                    [key]: value
+                }
+            });
+        } else {
+            // Find or create a style reference for this state
+            const style_references = [...(selectedNode.style_references || [])];
+            let refIndex = style_references.findIndex(r => r.state === activeState);
+
+            if (refIndex === -1) {
+                // Create a new reference for this state
+                style_references.push({
+                    state: activeState as any,
+                    styles: { [key]: value }
+                });
+            } else {
+                // Update existing reference
+                style_references[refIndex] = {
+                    ...style_references[refIndex],
+                    styles: {
+                        ...(style_references[refIndex].styles || {}),
+                        [key]: value
+                    }
+                };
             }
-        });
+
+            updateWidget(selectedNode.id, { style_references });
+        }
     };
+
+    const getStyleValue = (key: keyof StyleProperties) => {
+        if (activeState === 'DEFAULT') {
+            return selectedNode.styles?.[key];
+        }
+        const ref = selectedNode.style_references?.find(r => r.state === activeState);
+        return ref?.styles?.[key];
+    };
+
+    const handleNumberProp = (key: string, val: string) => {
+        handlePropChange(key, val === '' ? undefined : Number(val));
+    };
+
+    const handleNumberStyle = (key: keyof StyleProperties, val: string) => {
+        handleStyleChange(key, val === '' ? undefined : Number(val));
+    };
+
+    const isMultiple = selectedIds.length > 1;
 
     return (
         <div className="properties-panel">
+            {isMultiple && (
+                <div style={{ padding: '10px 20px', background: 'rgba(255,165,0,0.1)', color: 'orange', fontSize: '0.8rem', borderBottom: '1px solid var(--border-subtle)' }}>
+                    Editing primary selection ({selectedIds.length} items selected)
+                </div>
+            )}
             <div className="property-group">
                 <h3>General</h3>
                 <div className="prop-row">
@@ -62,6 +111,48 @@ export const PropertiesPanel: React.FC = () => {
                     <label>Type</label>
                     <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>
                         {selectedNode.type.toUpperCase()}
+                    </div>
+                </div>
+            </div>
+
+            <div className="property-group">
+                <h3>State</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div className="prop-row-checkbox">
+                        <input
+                            type="checkbox"
+                            checked={selectedNode.hidden || false}
+                            onChange={(e) => handlePropChange('hidden', e.target.checked)}
+                            id="prop-hidden"
+                        />
+                        <label htmlFor="prop-hidden">Hidden</label>
+                    </div>
+                    <div className="prop-row-checkbox">
+                        <input
+                            type="checkbox"
+                            checked={selectedNode.clickable ?? true}
+                            onChange={(e) => handlePropChange('clickable', e.target.checked)}
+                            id="prop-clickable"
+                        />
+                        <label htmlFor="prop-clickable">Clickable</label>
+                    </div>
+                    <div className="prop-row-checkbox">
+                        <input
+                            type="checkbox"
+                            checked={selectedNode.checkable || false}
+                            onChange={(e) => handlePropChange('checkable', e.target.checked)}
+                            id="prop-checkable"
+                        />
+                        <label htmlFor="prop-checkable">Checkable</label>
+                    </div>
+                    <div className="prop-row-checkbox">
+                        <input
+                            type="checkbox"
+                            checked={selectedNode.checked || false}
+                            onChange={(e) => handlePropChange('checked', e.target.checked)}
+                            id="prop-checked"
+                        />
+                        <label htmlFor="prop-checked">Checked</label>
                     </div>
                 </div>
             </div>
@@ -116,53 +207,476 @@ export const PropertiesPanel: React.FC = () => {
                         />
                     </div>
                 </div>
-            </div>
+                <div className="prop-row">
+                    <label>Align</label>
+                    <select
+                        value={selectedNode.align || ''}
+                        onChange={(e) => handlePropChange('align', e.target.value)}
+                    >
+                        <option value="">None</option>
+                        <option value="CENTER">Center</option>
+                        <option value="TOP_LEFT">Top Left</option>
+                        <option value="TOP_MID">Top Mid</option>
+                        <option value="TOP_RIGHT">Top Right</option>
+                        <option value="BOTTOM_LEFT">Bottom Left</option>
+                        <option value="BOTTOM_MID">Bottom Mid</option>
+                        <option value="BOTTOM_RIGHT">Bottom Right</option>
+                        <option value="LEFT_MID">Left Mid</option>
+                        <option value="RIGHT_MID">Right Mid</option>
+                    </select>
+                </div>
 
-            {(selectedNode.type === 'label' || selectedNode.type === 'button') && (
+                <div className="prop-row">
+                    <label>Layout</label>
+                    <select
+                        value={selectedNode.layout?.type || 'absolute'}
+                        onChange={(e) => {
+                            const type = e.target.value as any;
+                            handlePropChange('layout', { ...(selectedNode.layout || {}), type });
+                        }}
+                    >
+                        <option value="absolute">Absolute</option>
+                        <option value="flex">Flex</option>
+                        <option value="grid">Grid</option>
+                    </select>
+                </div>
+
+                {selectedNode.layout?.type === 'flex' && (
+                    <div className="nested-group">
+                        <div className="prop-row">
+                            <label>Flow</label>
+                            <select
+                                value={selectedNode.layout.flex_flow || 'row'}
+                                onChange={(e) => handlePropChange('layout', { ...selectedNode.layout, flex_flow: e.target.value })}
+                            >
+                                <option value="row">Row</option>
+                                <option value="column">Column</option>
+                                <option value="row_wrap">Row Wrap</option>
+                                <option value="column_wrap">Column Wrap</option>
+                            </select>
+                        </div>
+                        <div className="prop-row">
+                            <label>Main Al.</label>
+                            <select
+                                value={selectedNode.layout.flex_align_main || 'start'}
+                                onChange={(e) => handlePropChange('layout', { ...selectedNode.layout, flex_align_main: e.target.value })}
+                            >
+                                <option value="start">Start</option>
+                                <option value="center">Center</option>
+                                <option value="end">End</option>
+                                <option value="space_between">Between</option>
+                                <option value="space_around">Around</option>
+                                <option value="space_evenly">Evenly</option>
+                            </select>
+                        </div>
+                        <div className="prop-row">
+                            <label>Cross Al.</label>
+                            <select
+                                value={selectedNode.layout.flex_align_cross || 'start'}
+                                onChange={(e) => handlePropChange('layout', { ...selectedNode.layout, flex_align_cross: e.target.value })}
+                            >
+                                <option value="start">Start</option>
+                                <option value="center">Center</option>
+                                <option value="end">End</option>
+                                <option value="stretch">Stretch</option>
+                            </select>
+                        </div>
+                        <div className="prop-row" style={{ gridTemplateColumns: '50px 1fr' }}>
+                            <label>Grow</label>
+                            <input
+                                type="number"
+                                value={selectedNode.layout.flex_grow ?? ''}
+                                onChange={(e) => handlePropChange('layout', { ...selectedNode.layout, flex_grow: e.target.value === '' ? undefined : Number(e.target.value) })}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {selectedNode.layout?.type === 'grid' && (
+                    <div className="nested-group">
+                        <div className="prop-row">
+                            <label>Cols</label>
+                            <input
+                                type="text"
+                                placeholder="lv.fr(1), 100, ..."
+                                value={selectedNode.layout.grid_dsc_cols?.join(', ') || ''}
+                                onChange={(e) => {
+                                    const val = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                    handlePropChange('layout', { ...selectedNode.layout, grid_dsc_cols: val });
+                                }}
+                            />
+                        </div>
+                        <div className="prop-row">
+                            <label>Rows</label>
+                            <input
+                                type="text"
+                                placeholder="lv.fr(1), ..."
+                                value={selectedNode.layout.grid_dsc_rows?.join(', ') || ''}
+                                onChange={(e) => {
+                                    const val = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                    handlePropChange('layout', { ...selectedNode.layout, grid_dsc_rows: val });
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                <div className="nested-group" style={{ borderTop: '0.5px solid var(--border-subtle)', paddingTop: '8px', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginBottom: '4px' }}>Cell Position (Grid Only)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div className="prop-row" style={{ gridTemplateColumns: '35px 1fr', gap: '4px' }}>
+                            <label>Col</label>
+                            <input
+                                type="number"
+                                value={selectedNode.grid_cell_column_pos ?? ''}
+                                onChange={(e) => handleNumberProp('grid_cell_column_pos', e.target.value)}
+                            />
+                        </div>
+                        <div className="prop-row" style={{ gridTemplateColumns: '35px 1fr', gap: '4px' }}>
+                            <label>Row</label>
+                            <input
+                                type="number"
+                                value={selectedNode.grid_cell_row_pos ?? ''}
+                                onChange={(e) => handleNumberProp('grid_cell_row_pos', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div className="prop-row" style={{ gridTemplateColumns: '55px 1fr', gap: '4px' }}>
+                            <label>C-Span</label>
+                            <input
+                                type="number"
+                                value={selectedNode.grid_cell_column_span ?? ''}
+                                onChange={(e) => handleNumberProp('grid_cell_column_span', e.target.value)}
+                            />
+                        </div>
+                        <div className="prop-row" style={{ gridTemplateColumns: '55px 1fr', gap: '4px' }}>
+                            <label>R-Span</label>
+                            <input
+                                type="number"
+                                value={selectedNode.grid_cell_row_span ?? ''}
+                                onChange={(e) => handleNumberProp('grid_cell_row_span', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {(selectedNode.type === 'label' || selectedNode.type === 'button' || selectedNode.type === 'checkbox' || selectedNode.type === 'textarea') && (
                 <div className="property-group">
                     <h3>Content</h3>
                     <div className="prop-row">
                         <label>Text</label>
-                        <input
-                            type="text"
-                            value={selectedNode.text || ''}
-                            onChange={(e) => handlePropChange('text', e.target.value)}
-                            placeholder="mdi:home or text"
+                        {selectedNode.type === 'textarea' ? (
+                            <textarea
+                                value={selectedNode.text || ''}
+                                onChange={(e) => handlePropChange('text', e.target.value)}
+                                placeholder="Text content..."
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    background: 'hsl(var(--bg-surface))',
+                                    color: 'hsl(var(--text-main))',
+                                    border: '1px solid var(--border-subtle)',
+                                    borderRadius: '4px',
+                                    padding: '4px 8px',
+                                    fontFamily: 'inherit',
+                                    fontSize: '0.8rem',
+                                    resize: 'vertical'
+                                }}
+                            />
+                        ) : (
+                            <input
+                                type="text"
+                                value={selectedNode.text || ''}
+                                onChange={(e) => handlePropChange('text', e.target.value)}
+                                placeholder="mdi:home or text"
+                            />
+                        )}
+                    </div>
+                    {selectedNode.type === 'label' && (
+                        <div className="prop-row">
+                            <label>Mode</label>
+                            <select
+                                value={selectedNode.long_mode || 'WRAP'}
+                                onChange={(e) => handlePropChange('long_mode', e.target.value)}
+                            >
+                                <option value="WRAP">Wrap</option>
+                                <option value="DOT">Dot</option>
+                                <option value="SCROLL">Scroll</option>
+                                <option value="SCROLL_CIRC">Scroll Circ</option>
+                                <option value="CLIP">Clip</option>
+                            </select>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {(selectedNode.type === 'dropdown' || selectedNode.type === 'roller') && (
+                <div className="property-group">
+                    <h3>Options</h3>
+                    <div className="prop-row">
+                        <label>Items</label>
+                        <textarea
+                            value={selectedNode.options || ''}
+                            onChange={(e) => handlePropChange('options', e.target.value)}
+                            placeholder="Option 1\nOption 2"
+                            rows={4}
+                            style={{
+                                width: '100%',
+                                background: 'hsl(var(--bg-surface))',
+                                color: 'hsl(var(--text-main))',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                fontFamily: 'inherit',
+                                fontSize: '0.8rem',
+                                resize: 'vertical'
+                            }}
                         />
                     </div>
                 </div>
             )}
 
+            {(selectedNode.type === 'bar' || selectedNode.type === 'slider' || selectedNode.type === 'arc' || selectedNode.type === 'spinbox') && (
+                <div className="property-group">
+                    <h3>Value Range</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="prop-row" style={{ gridTemplateColumns: '35px 1fr', gap: '4px' }}>
+                            <label>Min</label>
+                            <input
+                                type="number"
+                                value={selectedNode.range_min ?? ''}
+                                onChange={(e) => handleNumberProp('range_min', e.target.value)}
+                            />
+                        </div>
+                        <div className="prop-row" style={{ gridTemplateColumns: '35px 1fr', gap: '4px' }}>
+                            <label>Max</label>
+                            <input
+                                type="number"
+                                value={selectedNode.range_max ?? ''}
+                                onChange={(e) => handleNumberProp('range_max', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div className="prop-row">
+                        <label>Value</label>
+                        <input
+                            type="number"
+                            value={selectedNode.value ?? ''}
+                            onChange={(e) => handleNumberProp('value', e.target.value)}
+                        />
+                    </div>
+                    {selectedNode.type === 'arc' && (
+                        <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                                    <label>Start</label>
+                                    <input
+                                        type="number"
+                                        value={selectedNode.start_angle ?? ''}
+                                        onChange={(e) => handleNumberProp('start_angle', e.target.value)}
+                                    />
+                                </div>
+                                <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                                    <label>End</label>
+                                    <input
+                                        type="number"
+                                        value={selectedNode.end_angle ?? ''}
+                                        onChange={(e) => handleNumberProp('end_angle', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="prop-row">
+                                <label>Rot</label>
+                                <input
+                                    type="number"
+                                    value={selectedNode.rotation ?? ''}
+                                    onChange={(e) => handleNumberProp('rotation', e.target.value)}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
             <div className="property-group">
                 <h3>Style</h3>
+                <div className="state-selector" style={{ display: 'flex', gap: '4px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {['DEFAULT', 'PRESSED', 'CHECKED', 'FOCUSED', 'DISABLED'].map(state => {
+                        const hasStateStyles = state !== 'DEFAULT' && selectedNode.style_references?.some(r => r.state === state && r.styles && Object.keys(r.styles).length > 0);
+                        return (
+                            <button
+                                key={state}
+                                onClick={() => setActiveState(state)}
+                                style={{
+                                    padding: '4px 8px',
+                                    fontSize: '0.7rem',
+                                    background: activeState === state ? 'var(--primary)' : 'hsl(var(--bg-surface-soft))',
+                                    color: activeState === state ? 'white' : 'hsl(var(--text-main))',
+                                    border: '1px solid var(--border-subtle)',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    position: 'relative'
+                                }}
+                            >
+                                {state.charAt(0) + state.slice(1).toLowerCase()}
+                                {hasStateStyles && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-2px',
+                                        right: '-2px',
+                                        width: '6px',
+                                        height: '6px',
+                                        background: activeState === state ? 'white' : 'var(--primary)',
+                                        borderRadius: '50%'
+                                    }} />
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="prop-row" style={{ display: 'block' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label>Styles</label>
+                        <button
+                            className="add-style-btn"
+                            onClick={() => {
+                                const newRefs = [...(selectedNode.style_references || []), { style_id: '' }];
+                                handlePropChange('style_references', newRefs);
+                            }}
+                            style={{
+                                padding: '2px 8px',
+                                fontSize: '0.7rem',
+                                background: 'var(--primary)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            + Add
+                        </button>
+                    </div>
+
+                    <div className="style-refs-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {selectedNode.style_references?.map((ref, index) => (
+                            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr 30px', gap: '4px', alignItems: 'center' }}>
+                                <select
+                                    value={ref.style_id}
+                                    onChange={(e) => {
+                                        const newRefs = [...(selectedNode.style_references || [])];
+                                        newRefs[index] = { ...ref, style_id: e.target.value };
+                                        handlePropChange('style_references', newRefs);
+
+                                        // Also update legacy class_names for compatibility
+                                        handlePropChange('class_names', newRefs.map(r => r.style_id).filter(Boolean));
+                                    }}
+                                    style={{ padding: '4px', fontSize: '0.75rem', background: 'hsl(var(--bg-surface))', color: 'hsl(var(--text-main))', border: '1px solid var(--border-subtle)', borderRadius: '4px' }}
+                                >
+                                    <option value="">Style ID</option>
+                                    {Object.keys(useStore.getState().global_styles).map(sId => (
+                                        <option key={sId} value={sId}>{sId}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    className="edit-style-btn"
+                                    onClick={() => useStore.getState().openStyleEditor(ref.style_id)}
+                                    title="Edit Style"
+                                    disabled={!ref.style_id}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: ref.style_id ? 'var(--primary)' : 'hsl(var(--text-dim))',
+                                        cursor: ref.style_id ? 'pointer' : 'default',
+                                        padding: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <i className="mdi mdi-pencil" style={{ fontSize: '0.9rem' }}></i>
+                                </button>
+                                <select
+                                    value={ref.state || 'DEFAULT'}
+                                    onChange={(e) => {
+                                        const newRefs = [...(selectedNode.style_references || [])];
+                                        newRefs[index] = {
+                                            ...ref,
+                                            state: e.target.value === 'DEFAULT' ? undefined : e.target.value as any
+                                        };
+                                        handlePropChange('style_references', newRefs);
+                                    }}
+                                    style={{ padding: '4px', fontSize: '0.75rem', background: 'hsl(var(--bg-surface))', color: 'hsl(var(--text-main))', border: '1px solid var(--border-subtle)', borderRadius: '4px' }}
+                                >
+                                    <option value="DEFAULT">Default</option>
+                                    <option value="PRESSED">Pressed</option>
+                                    <option value="CHECKED">Checked</option>
+                                    <option value="FOCUSED">Focused</option>
+                                    <option value="DISABLED">Disabled</option>
+                                </select>
+                                <button
+                                    onClick={() => {
+                                        const newRefs = selectedNode.style_references?.filter((_, i) => i !== index);
+                                        handlePropChange('style_references', newRefs);
+                                        handlePropChange('class_names', newRefs?.map(r => r.style_id).filter(Boolean));
+                                    }}
+                                    style={{
+                                        padding: '4px',
+                                        background: 'transparent',
+                                        color: 'hsl(var(--text-muted))',
+                                        border: 'none',
+                                        fontSize: '1rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
                 <div className="prop-row">
                     <label>Font</label>
                     <select
-                        value={selectedNode.styles?.text_font || ''}
+                        value={getStyleValue('text_font') || ''}
                         onChange={(e) => handleStyleChange('text_font', e.target.value)}
                     >
                         <option value="">Default</option>
                         {useStore.getState().assets
                             .filter(a => a.type === 'font')
                             .map(font => (
-                                <option key={font.id} value={font.value}>{font.name}</option>
+                                <option key={font.id} value={font.value}>
+                                    {font.name} ({font.family} {font.size}px)
+                                </option>
                             ))
                         }
                     </select>
                 </div>
                 <div className="prop-row">
-                    <label>Background</label>
+                    <label>T-Align</label>
+                    <select
+                        value={getStyleValue('text_align') || 'LEFT'}
+                        onChange={(e) => handleStyleChange('text_align', e.target.value)}
+                    >
+                        <option value="LEFT">Left</option>
+                        <option value="CENTER">Center</option>
+                        <option value="RIGHT">Right</option>
+                    </select>
+                </div>
+                <div className="prop-row">
+                    <label>Bg Color</label>
                     <div className="color-input-group">
                         <input
                             type="color"
-                            value={selectedNode.styles?.bg_color || '#000000'}
+                            value={getStyleValue('bg_color') || '#000000'}
                             onChange={(e) => handleStyleChange('bg_color', e.target.value)}
                         />
                         <input
                             type="text"
-                            value={selectedNode.styles?.bg_color || ''}
+                            value={getStyleValue('bg_color') || ''}
                             onChange={(e) => handleStyleChange('bg_color', e.target.value)}
-                            placeholder="hex"
+                            placeholder={activeState === 'DEFAULT' ? "hex" : (selectedNode.styles?.bg_color || "hex")}
                             className="text-input-compact"
                         />
                     </div>
@@ -172,26 +686,49 @@ export const PropertiesPanel: React.FC = () => {
                     <div className="color-input-group">
                         <input
                             type="color"
-                            value={selectedNode.styles?.text_color || '#ffffff'}
+                            value={getStyleValue('text_color') || '#ffffff'}
                             onChange={(e) => handleStyleChange('text_color', e.target.value)}
                         />
                         <input
                             type="text"
-                            value={selectedNode.styles?.text_color || ''}
+                            value={getStyleValue('text_color') || ''}
                             onChange={(e) => handleStyleChange('text_color', e.target.value)}
-                            placeholder="hex"
+                            placeholder={activeState === 'DEFAULT' ? "hex" : (selectedNode.styles?.text_color || "hex")}
                             className="text-input-compact"
                         />
                     </div>
                 </div>
-                <div className="prop-row">
-                    <label>Radius</label>
-                    <input
-                        type="number"
-                        value={selectedNode.styles?.radius || 0}
-                        onChange={(e) => handleStyleChange('radius', Number(e.target.value))}
-                    />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="prop-row" style={{ gridTemplateColumns: '45px 1fr', gap: '4px' }}>
+                        <label>Radius</label>
+                        <input
+                            type="number"
+                            value={getStyleValue('radius') ?? ''}
+                            placeholder={activeState !== 'DEFAULT' && selectedNode.styles?.radius !== undefined ? String(selectedNode.styles.radius) : ""}
+                            onChange={(e) => handleNumberStyle('radius', e.target.value)}
+                        />
+                    </div>
+                    <div className="prop-row" style={{ gridTemplateColumns: '45px 1fr', gap: '4px' }}>
+                        <label>Border</label>
+                        <input
+                            type="number"
+                            value={getStyleValue('border_width') ?? ''}
+                            placeholder={activeState !== 'DEFAULT' && selectedNode.styles?.border_width !== undefined ? String(selectedNode.styles.border_width) : ""}
+                            onChange={(e) => handleNumberStyle('border_width', e.target.value)}
+                        />
+                    </div>
                 </div>
+                {selectedNode.type === 'arc' && (
+                    <div className="prop-row">
+                        <label>Arc Width</label>
+                        <input
+                            type="number"
+                            value={getStyleValue('arc_width') ?? ''}
+                            placeholder={activeState !== 'DEFAULT' && selectedNode.styles?.arc_width !== undefined ? String(selectedNode.styles.arc_width) : ""}
+                            onChange={(e) => handleNumberStyle('arc_width', e.target.value)}
+                        />
+                    </div>
+                )}
             </div>
 
             <style>{`
@@ -210,6 +747,25 @@ export const PropertiesPanel: React.FC = () => {
                 .text-input-compact {
                     font-family: monospace;
                     font-size: 0.75rem !important;
+                }
+                .prop-row-checkbox {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 0.8rem;
+                    color: hsl(var(--text-muted));
+                }
+                .prop-row-checkbox input {
+                    width: 14px;
+                    height: 14px;
+                }
+                .nested-group {
+                    padding-left: 12px;
+                    border-left: 2px solid var(--border-subtle);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    margin-top: 8px;
                 }
             `}</style>
         </div>

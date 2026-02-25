@@ -9,8 +9,8 @@ interface TreeItemProps {
 }
 
 const TreeItem: React.FC<TreeItemProps> = ({ node, depth }) => {
-    const { selectedId, setSelectedId, moveWidget, removeWidget } = useStore();
-    const isSelected = selectedId === node.id;
+    const { selectedIds, setSelectedIds, moveWidget, removeWidget } = useStore();
+    const isSelected = selectedIds.includes(node.id);
     const [isExpanded, setIsExpanded] = useState(true);
 
     const [{ isDragging }, dragRef] = useDrag({
@@ -57,7 +57,18 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, depth }) => {
                     paddingLeft: `${depth * 16 + 8}px`,
                     opacity: isDragging ? 0.5 : 1,
                 }}
-                onClick={() => setSelectedId(node.id)}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                        if (isSelected) {
+                            setSelectedIds(selectedIds.filter(id => id !== node.id));
+                        } else {
+                            setSelectedIds([...selectedIds, node.id]);
+                        }
+                    } else {
+                        setSelectedIds([node.id]);
+                    }
+                }}
             >
                 <span className="tree-expander" onClick={handleToggle}>
                     {node.children && node.children.length > 0 ? (
@@ -68,20 +79,22 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, depth }) => {
                 </span>
                 <span className="tree-type-icon">
                     <i className={`mdi mdi-${node.type === 'page' ? 'file-document-outline' :
-                            node.type === 'button' ? 'gesture-tap-button' :
-                                node.type === 'label' ? 'format-text' :
-                                    node.type === 'arc' ? 'progress-helper' :
-                                        node.type === 'bar' ? 'poll' :
-                                            node.type === 'slider' ? 'tune-variant' :
-                                                node.type === 'switch' ? 'toggle-switch-outline' :
-                                                    'cube-outline'
+                        node.type === 'button' ? 'gesture-tap-button' :
+                            node.type === 'label' ? 'format-text' :
+                                node.type === 'arc' ? 'progress-helper' :
+                                    node.type === 'bar' ? 'poll' :
+                                        node.type === 'slider' ? 'tune-variant' :
+                                            node.type === 'switch' ? 'toggle-switch-outline' :
+                                                'cube-outline'
                         }`}></i>
                 </span>
                 <span className="tree-label">{node.name || node.type}</span>
                 <div className="tree-actions">
-                    <button className="tree-delete-btn" onClick={handleDelete} title="Delete widget">
-                        <i className="mdi mdi-close"></i>
-                    </button>
+                    {node.type !== 'page' && (
+                        <button className="tree-delete-btn" onClick={handleDelete} title="Delete widget">
+                            <i className="mdi mdi-close"></i>
+                        </button>
+                    )}
                 </div>
             </div>
             {isExpanded && node.children && node.children.length > 0 && (

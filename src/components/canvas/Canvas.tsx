@@ -6,8 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { useDrop } from 'react-dnd';
 
 export const Canvas: React.FC = () => {
-    const { widgets, setSelectedId, canvasConfig, gridConfig } = useStore();
+    const { widgets, setSelectedIds, selectedIds, canvasConfig, gridConfig } = useStore();
     const [fitScale, setFitScale] = React.useState(1);
+    const [selectionBox, setSelectionBox] = React.useState<{
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+    } | null>(null);
 
     const snapValue = (val: number) => {
         if (!gridConfig.enabled) return Math.round(val);
@@ -16,19 +22,17 @@ export const Canvas: React.FC = () => {
 
     // Calculate fit scale
     React.useEffect(() => {
-        if (canvasConfig.viewMode !== 'fit') return;
-
         const observer = new ResizeObserver((entries) => {
             const area = entries[0].contentRect;
-            const padding = 40; // Reduced from 120
+            const padding = 40;
             const horizontalScale = (area.width - padding) / canvasConfig.width;
             const verticalScale = (area.height - padding) / canvasConfig.height;
-            setFitScale(Math.min(horizontalScale, verticalScale)); // Removed the cap of 1
+            setFitScale(Math.min(horizontalScale, verticalScale));
         });
 
-        const areaEl = document.querySelector('.canvas-area') as HTMLElement;
+        const areaEl = (document.querySelector('.canvas-area') as HTMLElement);
         if (areaEl) {
-            areaEl.style.overflow = 'hidden'; // Prevent scrollbars in Fit mode
+            areaEl.style.overflow = 'hidden';
             observer.observe(areaEl);
         }
         return () => {
@@ -37,12 +41,82 @@ export const Canvas: React.FC = () => {
         };
     }, [canvasConfig.viewMode, canvasConfig.width, canvasConfig.height]);
 
-    const currentScale = canvasConfig.viewMode === 'fit' ? fitScale : canvasConfig.zoom;
+    const currentScale = (canvasConfig.viewMode === 'fit') ? fitScale : canvasConfig.zoom;
 
-    const handleCanvasClick = (e: React.MouseEvent) => {
-        if (e.target === e.currentTarget) {
-            setSelectedId(null);
-        }
+    const handleCanvasMouseDown = (e: React.MouseEvent) => {
+        // If the event reached here, it didn't hit a draggable widget (which stop propagation).
+        // It could be the root page or the canvas container itself.
+        const canvasEl = e.currentTarget as HTMLElement;
+        const rect = canvasEl.getBoundingClientRect();
+        const startX = (e.clientX - rect.left) / currentScale;
+        const startY = (e.clientY - rect.top) / currentScale;
+
+        setSelectionBox({ x1: startX, y1: startY, x2: startX, y2: startY });
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const currentX = (moveEvent.clientX - rect.left) / currentScale;
+            const currentY = (moveEvent.clientY - rect.top) / currentScale;
+            setSelectionBox(prev => prev ? { ...prev, x2: currentX, y2: currentY } : null);
+        };
+
+        const onMouseUp = (upEvent: MouseEvent) => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+
+            setSelectionBox(prev => {
+                if (!prev) return null;
+
+                const xMin = Math.min(prev.x1, prev.x2);
+                const xMax = Math.max(prev.x1, prev.x2);
+                const yMin = Math.min(prev.y1, prev.y2);
+                const yMax = Math.max(prev.y1, prev.y2);
+
+                const isPointInBox = (x: number, y: number) => x >= xMin && x <= xMax && y >= yMin && y <= yMax;
+                const isIntersecting = (node: WidgetNode) => {
+                    const nx = typeof node.x === 'number' ? node.x : 0;
+                    const ny = typeof node.y === 'number' ? node.y : 0;
+                    const nw = typeof node.width === 'number' ? node.width : 100;
+                    const nh = typeof node.height === 'number' ? node.height : 40;
+
+                    return !(nx > xMax || nx + nw < xMin || ny > yMax || ny + nh < yMin);
+                };
+
+                const newSelectedIds: string[] = [];
+                const search = (nodes: WidgetNode[], offsetX = 0, offsetY = 0) => {
+                    nodes.forEach(node => {
+                        const nx = (typeof node.x === 'number' ? node.x : 0) + offsetX;
+                        const ny = (typeof node.y === 'number' ? node.y : 0) + offsetY;
+                        const nw = (typeof node.width === 'number' ? node.width : (typeof node.width === 'string' && node.width.endsWith('%') ? 100 : 100)); // Rough estimate for non-numbers
+                        const nh = (typeof node.height === 'number' ? node.height : (typeof node.height === 'string' && node.height.endsWith('%') ? 40 : 40));
+
+                        const intersects = !(nx > xMax || nx + nw < xMin || ny > yMax || ny + nh < yMin);
+                        if (intersects) {
+                            newSelectedIds.push(node.id);
+                        }
+                        if (node.children) search(node.children, nx, ny);
+                    });
+                };
+                search(widgets);
+
+                if (upEvent.shiftKey || upEvent.ctrlKey || upEvent.metaKey) {
+                    setSelectedIds([...new Set([...selectedIds, ...newSelectedIds])]);
+                } else if (newSelectedIds.length > 0) {
+                    setSelectedIds(newSelectedIds);
+                } else if (Math.abs(prev.x1 - prev.x2) < 5 && Math.abs(prev.y1 - prev.y2) < 5) {
+                    // It was a click on the background - select the first page if available
+                    if (widgets.length > 0 && widgets[0].type === 'page') {
+                        setSelectedIds([widgets[0].id]);
+                    } else {
+                        setSelectedIds([]);
+                    }
+                }
+
+                return null;
+            });
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
     };
 
     const [{ isOver }, dropRef] = useDrop(() => ({
@@ -72,7 +146,15 @@ export const Canvas: React.FC = () => {
                     x, y,
                     width: item.type === 'slider' || item.type === 'bar' ? 150 : 100,
                     height: item.type === 'slider' || item.type === 'bar' ? 20 : 40,
-                    text: item.type === 'label' || item.type === 'button' ? `${item.type}` : undefined,
+                    text: item.type === 'label' || item.type === 'button' || item.type === 'checkbox' ? `${item.type}` : undefined,
+                    options: item.type === 'dropdown' || item.type === 'roller' ? "Option 1\nOption 2\nOption 3" : undefined,
+                    // Defaults for specific types
+                    range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox') ? 0 : undefined,
+                    range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox') ? 100 : undefined,
+                    value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox') ? 50 : undefined,
+                    start_angle: item.type === 'arc' ? 135 : undefined,
+                    end_angle: item.type === 'arc' ? 45 : undefined,
+                    checkable: (item.type === 'switch' || item.type === 'checkbox') ? true : undefined,
                     children: []
                 } : {
                     id: uuidv4(),
@@ -86,7 +168,7 @@ export const Canvas: React.FC = () => {
                 };
 
                 useStore.getState().addWidget(null, newWidget);
-                useStore.getState().setSelectedId(newWidget.id);
+                useStore.getState().setSelectedIds([newWidget.id]);
             }
         },
         collect: (monitor) => ({
@@ -99,16 +181,31 @@ export const Canvas: React.FC = () => {
     return (
         <div
             className="lvgl-screen"
-            onClick={handleCanvasClick}
+            onMouseDown={handleCanvasMouseDown}
             ref={drop}
             style={{
                 width: canvasConfig.width,
                 height: canvasConfig.height,
                 transform: `scale(${currentScale})`,
-                border: isOver ? '4px solid hsl(var(--primary))' : '1px solid var(--border-muted)',
-                boxShadow: 'var(--shadow-lg)'
+                border: (isOver ? '4px solid hsl(var(--primary))' : '1px solid var(--border-muted)'),
+                boxShadow: 'var(--shadow-lg)',
+                position: 'relative',
+                overflow: 'visible'
             }}
         >
+            {selectionBox && (
+                <div style={{
+                    position: 'absolute',
+                    left: Math.min(selectionBox.x1, selectionBox.x2),
+                    top: Math.min(selectionBox.y1, selectionBox.y2),
+                    width: Math.abs(selectionBox.x1 - selectionBox.x2),
+                    height: Math.abs(selectionBox.y1 - selectionBox.y2),
+                    border: '1px solid hsl(var(--primary))',
+                    backgroundColor: 'hsl(var(--primary) / 0.2)',
+                    pointerEvents: 'none',
+                    zIndex: 1000
+                }} />
+            )}
             {widgets.length === 0 ? (
                 <div className="empty-state">Drag widgets here</div>
             ) : (

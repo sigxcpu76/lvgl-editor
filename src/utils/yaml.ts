@@ -1,5 +1,5 @@
 import { Document, parseDocument } from 'yaml';
-import { WidgetNode, WidgetType, StyleProperties } from '../types';
+import { WidgetNode, WidgetType, StyleProperties, StyleReference } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -11,6 +11,7 @@ export class YamlEngine {
     private styles: Map<string, StyleProperties> = new Map();
     private substitutions: Map<string, string> = new Map();
     private fontMap: Map<string, string> = new Map();
+    private assets: any[] = [];
 
     constructor() { }
 
@@ -25,6 +26,8 @@ export class YamlEngine {
 
             this.styles.clear();
             this.substitutions.clear();
+            this.assets = [];
+            this.fontMap.clear();
 
             // 1. Extract global substitutions
             const subs = this.yamlDoc.get('substitutions') as any;
@@ -52,8 +55,9 @@ export class YamlEngine {
                             name: styleId,
                             type: 'font',
                             value: styleId,
-                            fontFamily: String(file),
-                            size: size ? Number(this.resolveText(size)) : undefined
+                            family: styleId, // Default family to ID if not specified, ESPHome uses ID for style
+                            size: size ? Number(this.resolveText(size)) : undefined,
+                            source: String(file)
                         });
 
                         // Also extract glyphs as individual icon assets if they are in the font
@@ -102,9 +106,9 @@ export class YamlEngine {
 
             const widgets = this.parseLvglTree(lvglNode);
 
-            // Default first level (pages) to 480x480 if they are 'object' types and have no x/y
+            // Default first level (pages) to 480x480 if they are 'object' or 'page' types and have no x/y
             for (const w of widgets) {
-                if (w.type === 'object' && (w.width === 100 || w.width === 0) && (w.height === 100 || w.height === 0)) {
+                if ((w.type === 'object' || w.type === 'page') && (w.width === 100 || w.width === 0) && (w.height === 100 || w.height === 0)) {
                     w.width = 480;
                     w.height = 480;
                 }
@@ -113,6 +117,7 @@ export class YamlEngine {
             const subsRecord: Record<string, string> = {};
             this.substitutions.forEach((v, k) => subsRecord[k] = v);
 
+            this.assets = assets;
             return { widgets, assets, substitutions: subsRecord };
         } catch (e) {
             console.error("YAML Parse Error:", e);
@@ -181,7 +186,7 @@ export class YamlEngine {
             if (pagesNode && pagesNode.items) {
                 for (const pageItem of pagesNode.items) {
                     // Each page is effectively a screen-level object
-                    const pageWidget = this.parseWidgetNode(pageItem, 'object');
+                    const pageWidget = this.parseWidgetNode(pageItem, 'page');
                     if (pageWidget) widgets.push(pageWidget);
                 }
             }
@@ -215,6 +220,7 @@ export class YamlEngine {
 
         // Known widget types in ESPHome LVGL
         const knownTypes: Record<string, WidgetType> = {
+            'page': 'page',
             'label': 'label',
             'button': 'button',
             'btn': 'button',
@@ -223,7 +229,13 @@ export class YamlEngine {
             'arc': 'arc',
             'bar': 'bar',
             'slider': 'slider',
-            'switch': 'switch'
+            'switch': 'switch',
+            'checkbox': 'checkbox',
+            'spinbox': 'spinbox',
+            'dropdown': 'dropdown',
+            'roller': 'roller',
+            'textarea': 'textarea',
+            'led': 'led'
         };
 
         let foundType: WidgetType | null = forceType || null;
@@ -259,11 +271,33 @@ export class YamlEngine {
         let grid_cell_x_align: string | undefined = undefined;
         let grid_cell_y_align: string | undefined = undefined;
 
+        let class_names: string[] | undefined = undefined;
+        let options: string | undefined = undefined;
+
+        let hidden: boolean | undefined = undefined;
+        let clickable: boolean | undefined = undefined;
+        let checkable: boolean | undefined = undefined;
+        let checked: boolean | undefined = undefined;
+        let long_mode: any = undefined;
+        let min_value: number | undefined = undefined;
+        let max_value: number | undefined = undefined;
+        let value: number | undefined = undefined;
+        let range_min: number | undefined = undefined;
+        let range_max: number | undefined = undefined;
+        let rotation: number | undefined = undefined;
+        let start_angle: number | undefined = undefined;
+        let end_angle: number | undefined = undefined;
+        let style_references_node: StyleReference[] | undefined = undefined;
+
         const children: WidgetNode[] = [];
 
         if (finalPropsNode && typeof finalPropsNode.get === 'function') {
             // Resolve basic properties with substitutions
-            if (finalPropsNode.has('id')) name = this.resolveText(finalPropsNode.get('id'), { resolveSubs: false });
+            // Keep original ID exactly, or default to generated name
+            if (finalPropsNode.has('id')) {
+                const idVal = finalPropsNode.get('id');
+                name = String((idVal && idVal.value !== undefined) ? idVal.value : idVal);
+            }
             if (finalPropsNode.has('x')) x = this.parseDimension(this.resolveText(finalPropsNode.get('x'), { resolveSubs: false }));
             if (finalPropsNode.has('y')) y = this.parseDimension(this.resolveText(finalPropsNode.get('y'), { resolveSubs: false }));
             if (finalPropsNode.has('width')) width = this.parseDimension(this.resolveText(finalPropsNode.get('width'), { resolveSubs: false }));
@@ -310,25 +344,90 @@ export class YamlEngine {
                 if (finalPropsNode.has('grid_cell_y_align')) grid_cell_y_align = this.resolveText(finalPropsNode.get('grid_cell_y_align')) as any;
             }
 
-            // Resolve Styles (ESPHome can have styles: style_id OR styles: [s1, s2])
+            // Resolve Styles (ESPHome can have styles: style_id OR styles: [s1, s2, {id: s3, state: PRESSED}])
             if (finalPropsNode.has('styles')) {
                 const stylesValue = finalPropsNode.get('styles');
-                const styleIds = (stylesValue && stylesValue.type === 'SEQ') ?
-                    stylesValue.items.map((i: any) => this.resolveText(i)) :
-                    [this.resolveText(stylesValue)];
+                const styleRefs: StyleReference[] = [];
 
-                for (const sId of styleIds) {
-                    const resolved = this.styles.get(sId);
-                    if (resolved) {
-                        Object.assign(styles, resolved);
-                    } else {
-                        console.log(`Style ID not found: ${sId}`);
+                if (stylesValue && stylesValue.type === 'SEQ') {
+                    for (const item of stylesValue.items) {
+                        if (item.type === 'MAP' || (item.items && !item.value)) {
+                            // It's a mapping {id: ..., state: ..., bg_color: ...}
+                            const sId = this.resolveText(item.get('id') || item.get('style_id'));
+                            const state = this.resolveText(item.get('state'))?.toUpperCase() as any;
+                            const itemStyles = this.parseStyles(item);
+                            if (sId || Object.keys(itemStyles).length > 0) {
+                                styleRefs.push({
+                                    style_id: sId,
+                                    state,
+                                    styles: Object.keys(itemStyles).length > 0 ? itemStyles : undefined
+                                });
+                            }
+                        } else {
+                            // It's a simple string ID
+                            const sId = this.resolveText(item);
+                            if (sId) styleRefs.push({ style_id: sId });
+                        }
                     }
+                } else if (stylesValue) {
+                    const sId = this.resolveText(stylesValue);
+                    if (sId) styleRefs.push({ style_id: sId });
+                }
+
+                if (styleRefs.length > 0) {
+                    const style_references: StyleReference[] = [];
+                    const class_names_legacy: string[] = [];
+
+                    for (const ref of styleRefs) {
+                        style_references.push(ref);
+                        if (ref.style_id) class_names_legacy.push(ref.style_id);
+
+                        // Apply default styles to the widget preview immediately
+                        if (ref.style_id && (!ref.state || ref.state === 'DEFAULT')) {
+                            const resolved = this.styles.get(ref.style_id);
+                            if (resolved) {
+                                Object.assign(styles, resolved);
+                            }
+                        }
+
+                        // Also apply inline styles if it's default state
+                        if (ref.styles && (!ref.state || ref.state === 'DEFAULT')) {
+                            Object.assign(styles, ref.styles);
+                        }
+                    }
+
+                    style_references_node = style_references;
+                    class_names = class_names_legacy;
                 }
             }
 
             // Direct styles override style_definitions
             Object.assign(styles, this.parseStyles(finalPropsNode));
+
+            // Core states
+            if (finalPropsNode.has('hidden')) hidden = this.resolveText(finalPropsNode.get('hidden')) === 'true';
+            if (finalPropsNode.has('clickable')) clickable = this.resolveText(finalPropsNode.get('clickable')) === 'true';
+            if (finalPropsNode.has('checkable')) checkable = this.resolveText(finalPropsNode.get('checkable')) === 'true';
+            if (finalPropsNode.has('checked')) checked = this.resolveText(finalPropsNode.get('checked')) === 'true';
+
+            // Specific Widget Props
+            if (finalPropsNode.has('options')) options = this.resolveText(finalPropsNode.get('options'));
+            if (finalPropsNode.has('long_mode')) long_mode = this.resolveText(finalPropsNode.get('long_mode')).toUpperCase() as any;
+            if (finalPropsNode.has('min_value')) min_value = Number(this.resolveText(finalPropsNode.get('min_value')));
+            if (finalPropsNode.has('max_value')) max_value = Number(this.resolveText(finalPropsNode.get('max_value')));
+            if (finalPropsNode.has('value')) value = Number(this.resolveText(finalPropsNode.get('value')));
+            if (finalPropsNode.has('rotation')) rotation = Number(this.resolveText(finalPropsNode.get('rotation')));
+            if (finalPropsNode.has('start_angle')) start_angle = Number(this.resolveText(finalPropsNode.get('start_angle')));
+            if (finalPropsNode.has('end_angle')) end_angle = Number(this.resolveText(finalPropsNode.get('end_angle')));
+
+            // Handle range: { min: ..., max: ... }
+            if (finalPropsNode.has('range')) {
+                const rangeNode = finalPropsNode.get('range');
+                if (rangeNode && typeof rangeNode.get === 'function') {
+                    if (rangeNode.has('min')) range_min = Number(this.resolveText(rangeNode.get('min')));
+                    if (rangeNode.has('max')) range_max = Number(this.resolveText(rangeNode.get('max')));
+                }
+            }
 
             // Recursive children
             const childrenKeys = ['widgets', 'children'];
@@ -351,7 +450,11 @@ export class YamlEngine {
             name,
             x, y, width, height, text, align, styles, layout, children,
             grid_cell_column_pos, grid_cell_column_span, grid_cell_row_pos, grid_cell_row_span,
-            grid_cell_x_align, grid_cell_y_align
+            grid_cell_x_align, grid_cell_y_align, class_names, options,
+            hidden, clickable, checkable, checked,
+            long_mode, min_value, max_value, value, range_min, range_max,
+            rotation, start_angle, end_angle,
+            style_references: style_references_node
         } as any;
     }
 
@@ -406,12 +509,18 @@ export class YamlEngine {
         if (node.has('bg_opa')) s.bg_opa = parseFloat(this.resolveText(node.get('bg_opa'))) / 255;
 
         if (node.has('text_font')) s.text_font = this.resolveFont(node.get('text_font'));
+        if (node.has('text_align')) s.text_align = this.resolveText(node.get('text_align')).toUpperCase() as any;
 
         if (node.has('pad_all')) s.pad_all = parseInt(this.resolveText(node.get('pad_all')), 10);
         if (node.has('pad_top')) s.pad_top = parseInt(this.resolveText(node.get('pad_top')), 10);
         if (node.has('pad_bottom')) s.pad_bottom = parseInt(this.resolveText(node.get('pad_bottom')), 10);
         if (node.has('pad_left')) s.pad_left = parseInt(this.resolveText(node.get('pad_left')), 10);
         if (node.has('pad_right')) s.pad_right = parseInt(this.resolveText(node.get('pad_right')), 10);
+
+        if (node.has('line_width')) s.line_width = parseInt(this.resolveText(node.get('line_width')), 10);
+        if (node.has('line_color')) s.line_color = this.parseColor(node.get('line_color'));
+        if (node.has('arc_width')) s.arc_width = parseInt(this.resolveText(node.get('arc_width')), 10);
+        if (node.has('arc_color')) s.arc_color = this.parseColor(node.get('arc_color'));
 
         return s;
     }
@@ -420,17 +529,44 @@ export class YamlEngine {
      * Serializes the current internal WidgetNode tree BACK into the Yaml Document,
      * maintaining all non-LVGL components and comments.
      */
-    generate(widgets: WidgetNode[]): string {
+    generate(widgets: WidgetNode[], assets: any[], global_styles: Record<string, StyleProperties> = {}): string {
         if (!this.yamlDoc) {
             this.yamlDoc = parseDocument(DEFAULT_ESPHOME_YAML);
         }
 
         this.syncSubstitutions(widgets);
+        this.syncFonts(assets);
 
         const rootContent = this.yamlDoc.contents as any;
         const lvglNode = this.findLvglNode(rootContent, 0);
 
         if (lvglNode) {
+            // Write style definitions
+            if (Object.keys(global_styles).length > 0) {
+                const styleDefs = Object.entries(global_styles).map(([id, styles]) => {
+                    const yamlStyle: any = { id };
+                    if (styles.bg_color) yamlStyle.bg_color = styles.bg_color;
+                    if (styles.text_color) yamlStyle.text_color = styles.text_color;
+                    if (styles.border_color) yamlStyle.border_color = styles.border_color;
+                    if (styles.radius !== undefined) yamlStyle.radius = styles.radius;
+                    if (styles.border_width !== undefined) yamlStyle.border_width = styles.border_width;
+                    if (styles.pad_all !== undefined) yamlStyle.pad_all = styles.pad_all;
+                    if (styles.pad_left !== undefined) yamlStyle.pad_left = styles.pad_left;
+                    if (styles.pad_right !== undefined) yamlStyle.pad_right = styles.pad_right;
+                    if (styles.pad_top !== undefined) yamlStyle.pad_top = styles.pad_top;
+                    if (styles.pad_bottom !== undefined) yamlStyle.pad_bottom = styles.pad_bottom;
+                    if (styles.bg_opa !== undefined) yamlStyle.bg_opa = Math.round(styles.bg_opa * 255);
+                    if (styles.text_font) yamlStyle.text_font = styles.text_font;
+                    if (styles.text_align) yamlStyle.text_align = styles.text_align;
+                    if (styles.arc_color) yamlStyle.arc_color = styles.arc_color;
+                    if (styles.arc_width !== undefined) yamlStyle.arc_width = styles.arc_width;
+                    if (styles.line_color) yamlStyle.line_color = styles.line_color;
+                    if (styles.line_width !== undefined) yamlStyle.line_width = styles.line_width;
+                    return yamlStyle;
+                });
+                lvglNode.set('style_definitions', this.yamlDoc.createNode(styleDefs));
+            }
+
             const yamlWidgets = widgets.map(w => this.buildYamlWidget(w));
 
             // Check if we should use 'pages' or 'widgets'
@@ -445,48 +581,64 @@ export class YamlEngine {
             }
         }
 
-        return String(this.yamlDoc);
+        // After generating the string, replace any literal PUA characters with \U hex escapes
+        let finalYaml = String(this.yamlDoc);
+        finalYaml = this.formatText(finalYaml) || finalYaml;
+
+        return finalYaml;
+    }
+
+    private syncFonts(_widgets: WidgetNode[]) {
+        if (!this.yamlDoc) return;
+
+        // Find all font assets in the store
+        // We actually need the assets from the store, but YamlEngine is a utility.
+        // The generate() method should probably take assets too.
+        // For now, we'll assume the assets were provided or we'll just use what we parsed.
+        // BETTER: Update generate signature to (widgets, assets)
     }
 
     private syncSubstitutions(widgets: WidgetNode[]) {
         if (!this.yamlDoc) return;
+        // Do not auto-inject structural substitutions. 
+        // We will preserve the user's substitutions entirely as they were.
+    }
 
-        let subs = this.yamlDoc.get('substitutions') as any;
-        if (!subs) {
-            subs = this.yamlDoc.createNode({});
-            this.yamlDoc.set('substitutions', subs);
-        }
+    private formatColor(hex: string | undefined): string | undefined {
+        if (!hex) return undefined;
+        if (hex === 'transparent') return '0x00000000';
+        if (hex.startsWith('0x')) return hex;
+        return hex.replace('#', '0x');
+    }
 
-        const collectWidgetIds = (nodes: WidgetNode[], ids: string[] = []) => {
-            for (const n of nodes) {
-                if (n.name) ids.push(n.name);
-                if (n.children) collectWidgetIds(n.children, ids);
+    private formatText(text: string | undefined): string | undefined {
+        if (!text) return text;
+        // Convert any PUA characters back to \U escapes for ESPHome YAML
+        const chars = Array.from(text);
+        let out = '';
+        for (const char of chars) {
+            const cp = char.codePointAt(0);
+            if (cp && ((cp >= 0xE000 && cp <= 0xF8FF) || (cp >= 0xF0000 && cp <= 0xFFFFD) || (cp >= 0x100000 && cp <= 0x10FFFD))) {
+                out += `\\U${cp.toString(16).padStart(8, '0').toUpperCase()}`;
+            } else {
+                out += char;
             }
-            return ids;
-        };
-
-        const allIds = collectWidgetIds(widgets);
-        for (const id of allIds) {
-            const subKey = `${id}_id`;
-            // Only add if not already present to avoid overwriting user customizations
-            if (!subs.has(subKey)) {
-                subs.set(subKey, id);
-            }
         }
+        return out;
     }
 
     private buildYamlWidget(w: WidgetNode): any {
         const props: any = {};
-        // Use substitution for ID if possible
+
         if (w.name) {
-            props.id = `\${${w.name}_id}`;
+            props.id = w.name;
         }
 
         if (w.x !== undefined) props.x = w.x;
         if (w.y !== undefined) props.y = w.y;
         if (w.width !== undefined) props.width = w.width;
         if (w.height !== undefined) props.height = w.height;
-        if (w.text) props.text = w.text;
+        if (w.text) props.text = this.formatText(w.text) || '';
         if (w.align) props.align = w.align;
 
         // Grid cell props
@@ -496,6 +648,29 @@ export class YamlEngine {
         if (w.grid_cell_row_span !== undefined) props.grid_cell_row_span = w.grid_cell_row_span;
         if (w.grid_cell_x_align) props.grid_cell_x_align = w.grid_cell_x_align;
         if (w.grid_cell_y_align) props.grid_cell_y_align = w.grid_cell_y_align;
+
+        // Core states
+        if (w.hidden !== undefined) props.hidden = w.hidden;
+        if (w.clickable !== undefined) props.clickable = w.clickable;
+        if (w.checkable !== undefined) props.checkable = w.checkable;
+        if (w.checked !== undefined) props.checked = w.checked;
+        if (w.options) props.options = this.formatText(w.options) || '';
+
+        // Specific Widget Props
+        if (w.long_mode) props.long_mode = w.long_mode;
+        if (w.min_value !== undefined) props.min_value = w.min_value;
+        if (w.max_value !== undefined) props.max_value = w.max_value;
+        if (w.value !== undefined) props.value = w.value;
+        if (w.rotation !== undefined) props.rotation = w.rotation;
+        if (w.start_angle !== undefined) props.start_angle = w.start_angle;
+        if (w.end_angle !== undefined) props.end_angle = w.end_angle;
+
+        if (w.range_min !== undefined || w.range_max !== undefined) {
+            props.range = {
+                min: w.range_min ?? 0,
+                max: w.range_max ?? 100
+            };
+        }
 
         if (w.layout) {
             const l: any = { type: w.layout.type };
@@ -516,6 +691,7 @@ export class YamlEngine {
             if (s.bg_opa !== undefined) props.bg_opa = Math.round(s.bg_opa * 255);
             if (s.text_color) props.text_color = s.text_color;
             if (s.text_font) props.text_font = s.text_font;
+            if (s.text_align) props.text_align = s.text_align;
             if (s.radius !== undefined) props.radius = s.radius;
             if (s.border_width !== undefined) props.border_width = s.border_width;
             if (s.border_color) props.border_color = s.border_color;
@@ -528,6 +704,50 @@ export class YamlEngine {
             if (s.shadow_color) props.shadow_color = s.shadow_color;
             if (s.shadow_ofs_x !== undefined) props.shadow_ofs_x = s.shadow_ofs_x;
             if (s.shadow_ofs_y !== undefined) props.shadow_ofs_y = s.shadow_ofs_y;
+            if (s.line_width !== undefined) props.line_width = s.line_width;
+            if (s.line_color) props.line_color = s.line_color;
+            if (s.arc_width !== undefined) props.arc_width = s.arc_width;
+            if (s.arc_color) props.arc_color = s.arc_color;
+        }
+
+        if (w.style_references && w.style_references.length > 0) {
+            props.styles = w.style_references.map(ref => {
+                const hasInlineStyles = ref.styles && Object.keys(ref.styles).length > 0;
+                if ((ref.state && ref.state !== 'DEFAULT') || hasInlineStyles) {
+                    const result: any = {};
+                    if (ref.style_id) result.id = ref.style_id;
+                    if (ref.state && ref.state !== 'DEFAULT') result.state = ref.state;
+
+                    if (hasInlineStyles && ref.styles) {
+                        const s = ref.styles;
+                        if (s.bg_color) result.bg_color = this.formatColor(s.bg_color);
+                        if (s.bg_opa !== undefined) result.bg_opa = Math.round(s.bg_opa * 255);
+                        if (s.text_color) result.text_color = this.formatColor(s.text_color);
+                        if (s.text_font) result.text_font = s.text_font;
+                        if (s.text_align) result.text_align = s.text_align;
+                        if (s.radius !== undefined) result.radius = s.radius;
+                        if (s.border_width !== undefined) result.border_width = s.border_width;
+                        if (s.border_color) result.border_color = this.formatColor(s.border_color);
+                        if (s.pad_all !== undefined) result.pad_all = s.pad_all;
+                        if (s.pad_top !== undefined) result.pad_top = s.pad_top;
+                        if (s.pad_bottom !== undefined) result.pad_bottom = s.pad_bottom;
+                        if (s.pad_left !== undefined) result.pad_left = s.pad_left;
+                        if (s.pad_right !== undefined) result.pad_right = s.pad_right;
+                        if (s.shadow_width !== undefined) result.shadow_width = s.shadow_width;
+                        if (s.shadow_color) result.shadow_color = this.formatColor(s.shadow_color);
+                        if (s.shadow_ofs_x !== undefined) result.shadow_ofs_x = s.shadow_ofs_x;
+                        if (s.shadow_ofs_y !== undefined) result.shadow_ofs_y = s.shadow_ofs_y;
+                        if (s.line_width !== undefined) result.line_width = s.line_width;
+                        if (s.line_color) result.line_color = this.formatColor(s.line_color);
+                        if (s.arc_width !== undefined) result.arc_width = s.arc_width;
+                        if (s.arc_color) result.arc_color = this.formatColor(s.arc_color);
+                    }
+                    return result;
+                }
+                return ref.style_id;
+            });
+        } else if (w.class_names && w.class_names.length > 0) {
+            props.styles = w.class_names;
         }
 
         if (w.children && w.children.length > 0) {

@@ -15,11 +15,11 @@ const updateWidgetInTree = (nodes: WidgetNode[], id: string, updates: Partial<Wi
     });
 };
 
-// Helper to filter out a widget from the tree
-const removeWidgetFromTree = (nodes: WidgetNode[], id: string): WidgetNode[] => {
-    return nodes.filter(node => node.id !== id).map(node => {
+// Helper to filter out multiple widgets from the tree
+const removeWidgetsFromTree = (nodes: WidgetNode[], ids: string[]): WidgetNode[] => {
+    return nodes.filter(node => !ids.includes(node.id)).map(node => {
         if (node.children && node.children.length > 0) {
-            return { ...node, children: removeWidgetFromTree(node.children, id) };
+            return { ...node, children: removeWidgetsFromTree(node.children, ids) };
         }
         return node;
     });
@@ -122,9 +122,10 @@ const initialWidgets: WidgetNode[] = [
 
 export const useStore = create<EditorState>((set) => ({
     widgets: initialWidgets,
-    selectedId: null,
+    selectedIds: [],
     assets: [],
     substitutions: {},
+    global_styles: {},
     canvasConfig: {
         width: 480,
         height: 480,
@@ -143,39 +144,235 @@ export const useStore = create<EditorState>((set) => ({
         size: 10,
         visible: true,
     },
+    clipboard: null,
+    clipboardOffset: 0,
+    theme: 'dark',
+    setTheme: (theme) => set({ theme }),
+    rawYaml: null,
+    setRawYaml: (rawYaml) => set({ rawYaml }),
+
+    styleEditorOpen: false,
+    editingStyleId: null,
+    openStyleEditor: (styleId) => set({ styleEditorOpen: true, editingStyleId: styleId || null }),
+    closeStyleEditor: () => set({ styleEditorOpen: false, editingStyleId: null }),
+
+    emulatorOpen: false,
+    setEmulatorOpen: (emulatorOpen) => set({ emulatorOpen }),
+
+    // History
+    past: [],
+    future: [],
+    canUndo: false,
+    canRedo: false,
+
+    undo: () => set((state) => {
+        if (state.past.length === 0) return state;
+        const previous = state.past[state.past.length - 1];
+        const newPast = state.past.slice(0, state.past.length - 1);
+        return {
+            past: newPast,
+            widgets: previous,
+            future: [state.widgets, ...state.future],
+            canUndo: newPast.length > 0,
+            canRedo: true
+        };
+    }),
+
+    redo: () => set((state) => {
+        if (state.future.length === 0) return state;
+        const next = state.future[0];
+        const newFuture = state.future.slice(1);
+        return {
+            past: [...state.past, state.widgets],
+            widgets: next,
+            future: newFuture,
+            canUndo: true,
+            canRedo: newFuture.length > 0
+        };
+    }),
+
+    resetState: () => set({
+        widgets: initialWidgets,
+        past: [],
+        future: [],
+        canUndo: false,
+        canRedo: false,
+        selectedIds: [],
+        assets: [],
+        substitutions: {},
+        global_styles: {}
+    }),
+
+    pushHistory: () => set((state) => ({
+        past: [...state.past, state.widgets],
+        future: [],
+        canUndo: true,
+        canRedo: false
+    })),
 
     addWidget: (parentId, widget) =>
-        set((state) => ({
-            widgets: addWidgetToTree(state.widgets, parentId, widget)
-        })),
+        set((state) => {
+            const newWidgets = addWidgetToTree(state.widgets, parentId, widget);
+            return {
+                past: [...state.past, state.widgets],
+                future: [],
+                widgets: newWidgets,
+                selectedIds: [widget.id],
+                canUndo: true,
+                canRedo: false
+            };
+        }),
 
-    updateWidget: (id, updates) =>
-        set((state) => ({
-            widgets: updateWidgetInTree(state.widgets, id, updates)
-        })),
+    updateWidget: (id, updates, saveHistory = true) =>
+        set((state) => {
+            const newWidgets = updateWidgetInTree(state.widgets, id, updates);
+            if (saveHistory) {
+                return {
+                    past: [...state.past, state.widgets],
+                    future: [],
+                    widgets: newWidgets,
+                    canUndo: true,
+                    canRedo: false
+                };
+            }
+            return {
+                widgets: newWidgets
+            };
+        }),
 
-    removeWidget: (id) =>
-        set((state) => ({
-            widgets: removeWidgetFromTree(state.widgets, id),
-            // clear selection if we deleted the selected widget
-            selectedId: state.selectedId === id ? null : state.selectedId
-        })),
+    removeWidget: (idOrIds) =>
+        set((state) => {
+            const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+            const newWidgets = removeWidgetsFromTree(state.widgets, ids);
+            return {
+                past: [...state.past, state.widgets],
+                future: [],
+                widgets: newWidgets,
+                selectedIds: state.selectedIds.filter(sid => !ids.includes(sid)),
+                canUndo: true,
+                canRedo: false
+            };
+        }),
 
-    setSelectedId: (id) =>
-        set({ selectedId: id }),
+    setSelectedIds: (ids) =>
+        set({ selectedIds: ids }),
 
     // For DND reordering
     moveWidget: (id, parentId, index) =>
         set((state) => {
             const widget = findWidgetInTree(state.widgets, id);
             if (!widget) return state;
-            const treeWithoutWidget = removeWidgetFromTree(state.widgets, id);
+            const treeWithoutWidget = removeWidgetsFromTree(state.widgets, [id]);
+            const newWidgets = insertWidgetInTree(treeWithoutWidget, parentId, widget, index);
             return {
-                widgets: insertWidgetInTree(treeWithoutWidget, parentId, widget, index)
+                past: [...state.past, state.widgets],
+                future: [],
+                widgets: newWidgets,
+                canUndo: true,
+                canRedo: false
             };
         }),
 
-    loadState: (widgets) => set({ widgets }),
+    copySelectedWidget: () => set((state) => {
+        if (state.selectedIds.length === 0) return state;
+        const mainId = state.selectedIds[0];
+        const widget = findWidgetInTree(state.widgets, mainId);
+        if (!widget || widget.type === 'page') return state;
+        return {
+            clipboard: widget,
+            clipboardOffset: 10
+        };
+    }),
+
+    pasteWidget: () => set((state) => {
+        if (!state.clipboard) return state;
+
+        let parentId: string | null = null;
+        if (state.selectedIds.length > 0) {
+            const mainId = state.selectedIds[0];
+            const selectedWidget = findWidgetInTree(state.widgets, mainId);
+            if (selectedWidget) {
+                if (selectedWidget.type === 'page') {
+                    parentId = selectedWidget.id;
+                } else {
+                    const findParent = (nodes: WidgetNode[], targetId: string): string | null => {
+                        for (const node of nodes) {
+                            if (node.children?.some(c => c.id === targetId)) return node.id;
+                            const pId = findParent(node.children || [], targetId);
+                            if (pId) return pId;
+                        }
+                        return null;
+                    };
+                    parentId = findParent(state.widgets, mainId);
+                }
+            }
+        }
+
+        if (!parentId && state.widgets.length > 0) {
+            parentId = state.widgets[0].id;
+        }
+
+        const cloneWidget = (node: WidgetNode, offset: number): WidgetNode => {
+            const newId = uuidv4();
+            return {
+                ...node,
+                id: newId,
+                name: `${node.name}_copy`,
+                x: typeof node.x === 'number' ? node.x + offset : node.x,
+                y: typeof node.y === 'number' ? node.y + offset : node.y,
+                children: (node.children || []).map(child => cloneWidget(child, 0))
+            };
+        };
+
+        const newWidget = cloneWidget(state.clipboard, state.clipboardOffset);
+        const newWidgets = addWidgetToTree(state.widgets, parentId, newWidget);
+
+        return {
+            past: [...state.past, state.widgets],
+            future: [],
+            widgets: newWidgets,
+            selectedIds: [newWidget.id],
+            clipboardOffset: state.clipboardOffset + 10,
+            canUndo: true,
+            canRedo: false
+        };
+    }),
+
+    loadState: (widgets) => set({
+        widgets,
+        past: [],
+        future: [],
+        canUndo: false,
+        canRedo: false
+    }),
+
+    moveSelectedWidgets: (dx, dy) => set((state) => {
+        if (state.selectedIds.length === 0) return state;
+
+        const moveNode = (nodes: WidgetNode[]): WidgetNode[] => {
+            return nodes.map(node => {
+                let newNode = node;
+                if (state.selectedIds.includes(node.id)) {
+                    const nx = typeof node.x === 'number' ? node.x + dx : node.x;
+                    const ny = typeof node.y === 'number' ? node.y + dy : node.y;
+                    newNode = { ...node, x: nx, y: ny };
+                }
+                if (newNode.children && newNode.children.length > 0) {
+                    newNode = { ...newNode, children: moveNode(newNode.children) };
+                }
+                return newNode;
+            });
+        };
+
+        const newWidgets = moveNode(state.widgets);
+        return {
+            past: [...state.past, state.widgets],
+            future: [],
+            widgets: newWidgets,
+            canUndo: true,
+            canRedo: false
+        };
+    }),
 
     setCanvasSize: (width, height) =>
         set((state) => ({
@@ -217,4 +414,60 @@ export const useStore = create<EditorState>((set) => ({
 
     loadAssets: (assets) => set({ assets }),
     setSubstitutions: (substitutions) => set({ substitutions }),
+
+    updateGlobalStyle: (className, styles) => set((state) => ({
+        global_styles: {
+            ...state.global_styles,
+            [className]: styles
+        }
+    })),
+
+    removeGlobalStyle: (className) => set((state) => {
+        const newStyles = { ...state.global_styles };
+        delete newStyles[className];
+        return { global_styles: newStyles };
+    }),
 }));
+
+// Persistence logic
+const STORAGE_KEY = 'lvgl-editor-state';
+
+const saveState = (state: EditorState) => {
+    const data = {
+        widgets: state.widgets,
+        assets: state.assets,
+        substitutions: state.substitutions,
+        global_styles: state.global_styles,
+        canvasConfig: state.canvasConfig,
+        gridConfig: state.gridConfig,
+        theme: state.theme,
+        rawYaml: state.rawYaml
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+};
+
+export const loadStateFromStorage = () => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) {
+        try {
+            return JSON.parse(data);
+        } catch (e) {
+            console.error('Failed to parse stored state', e);
+        }
+    }
+    return null;
+};
+
+// Subscribe to changes and save
+useStore.subscribe((state, prevState) => {
+    if (state.widgets !== prevState.widgets ||
+        state.assets !== prevState.assets ||
+        state.substitutions !== prevState.substitutions ||
+        state.global_styles !== prevState.global_styles ||
+        state.canvasConfig !== prevState.canvasConfig ||
+        state.gridConfig !== prevState.gridConfig ||
+        state.theme !== prevState.theme ||
+        state.rawYaml !== prevState.rawYaml) {
+        saveState(state);
+    }
+});

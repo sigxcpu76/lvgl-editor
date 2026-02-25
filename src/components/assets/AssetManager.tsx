@@ -12,6 +12,18 @@ const cleanName = (text: string) => {
     }).join('').trim();
 };
 
+const loadGoogleFont = (family: string) => {
+    if (!family) return;
+    const linkId = `gfont-${family.replace(/\s+/g, '-').toLowerCase()}`;
+    if (document.getElementById(linkId)) return;
+
+    const link = document.createElement('link');
+    link.id = linkId;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/\s+/g, '+')}&display=swap`;
+    document.head.appendChild(link);
+};
+
 const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void }> = ({ asset, onRemove }) => {
     const [{ isDragging }, dragRef] = useDrag({
         type: 'asset',
@@ -47,6 +59,9 @@ const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void }>
                 )}
                 <div className="asset-details">
                     <span className="asset-name">{cleanName(asset.name)}</span>
+                    {asset.type === 'font' && asset.size && (
+                        <span className="asset-val">{asset.family} {asset.size}px</span>
+                    )}
                 </div>
             </div>
             <button className="btn-remove" onClick={() => onRemove(asset.id)}>×</button>
@@ -59,18 +74,44 @@ export const AssetManager: React.FC = () => {
     const [name, setName] = useState('');
     const [type, setType] = useState<'icon' | 'font'>('icon');
     const [value, setValue] = useState('');
+    const [family, setFamily] = useState('');
+    const [size, setSize] = useState('16');
+    const [source, setSource] = useState('');
+
+    React.useEffect(() => {
+        assets.filter(a => a.type === 'font' && a.source?.startsWith('gfonts://')).forEach(a => {
+            const gfamily = a.source?.replace('gfonts://', '');
+            if (gfamily) loadGoogleFont(gfamily);
+        });
+    }, [assets]);
 
     const handleAdd = () => {
-        if (!name || !value) return;
+        if (!name || (type === 'icon' && !value) || (type === 'font' && !family)) return;
+
+        let finalSource = source;
+        if (type === 'font' && !finalSource && family) {
+            finalSource = `gfonts://${family}`;
+        }
+
         const newAsset: Asset = {
             id: uuidv4(),
             name,
             type,
-            value
+            value: type === 'icon' ? value : name, // Use name as ID for fonts
+            family: type === 'font' ? family : undefined,
+            size: type === 'font' ? Number(size) : undefined,
+            source: type === 'font' ? finalSource : undefined
         };
+
+        if (type === 'font' && finalSource?.startsWith('gfonts://')) {
+            loadGoogleFont(family);
+        }
+
         addAsset(newAsset);
         setName('');
         setValue('');
+        setFamily('');
+        setSource('');
     };
 
     return (
@@ -92,15 +133,46 @@ export const AssetManager: React.FC = () => {
                         <option value="font">Font (Custom)</option>
                     </select>
                 </div>
-                <div className="prop-row">
-                    <label>{type === 'icon' ? 'MDI Name' : 'Family'}</label>
-                    <input
-                        type="text"
-                        placeholder={type === 'icon' ? "home" : "Roboto"}
-                        value={value}
-                        onChange={e => setValue(e.target.value)}
-                    />
-                </div>
+                {type === 'icon' ? (
+                    <div className="prop-row">
+                        <label>MDI Name</label>
+                        <input
+                            type="text"
+                            placeholder="home"
+                            value={value}
+                            onChange={e => setValue(e.target.value)}
+                        />
+                    </div>
+                ) : (
+                    <>
+                        <div className="prop-row">
+                            <label>Family</label>
+                            <input
+                                type="text"
+                                placeholder="Roboto"
+                                value={family}
+                                onChange={e => setFamily(e.target.value)}
+                            />
+                        </div>
+                        <div className="prop-row">
+                            <label>Size</label>
+                            <input
+                                type="number"
+                                value={size}
+                                onChange={e => setSize(e.target.value)}
+                            />
+                        </div>
+                        <div className="prop-row">
+                            <label>Source</label>
+                            <input
+                                type="text"
+                                placeholder="gfonts://Roboto"
+                                value={source}
+                                onChange={e => setSource(e.target.value)}
+                            />
+                        </div>
+                    </>
+                )}
                 <button className="btn primary w-full" style={{ marginTop: '8px' }} onClick={handleAdd}>
                     Add Asset
                 </button>

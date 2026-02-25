@@ -2,6 +2,9 @@
   "name": "lvgl-editor",
   "private": true,
   "version": "0.0.0",
+  "description": "LVGL Editor Electron Application",
+  "author": "sigxcpu <sigxcpu@example.com>",
+  "homepage": "https://git.xelasys.ro/sigxcpu/lvgl-editor",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {

@@ -14,7 +14,7 @@ interface Props {
 }
 
 export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null, parentLayout = 'absolute', parentFlexFlow }) => {
-    const { selectedId, setSelectedId, updateWidget, gridConfig, canvasConfig, assets, substitutions } = useStore();
+    const { selectedIds, setSelectedIds, updateWidget, gridConfig, canvasConfig, assets, substitutions, global_styles } = useStore();
 
     const resolveValue = useCallback((val: any): any => {
         if (typeof val !== 'string') return val;
@@ -25,7 +25,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         });
         return str;
     }, [substitutions]);
-    const isSelected = selectedId === node.id;
+    const isSelected = selectedIds.includes(node.id);
     const [isResizing, setIsResizing] = useState(false);
 
     const snapValue = useCallback((val: number) => {
@@ -47,7 +47,14 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         const startXPos = typeof node.x === 'number' ? node.x : 0;
         const startYPos = typeof node.y === 'number' ? node.y : 0;
 
+        let hasMoved = false;
+
         const onMouseMove = (moveEvent: MouseEvent) => {
+            if (!hasMoved) {
+                useStore.getState().pushHistory();
+                hasMoved = true;
+            }
+
             const areaEl = document.querySelector('.lvgl-screen');
             const rect = areaEl?.getBoundingClientRect();
             const scale = rect ? (rect.width / canvasConfig.width) : 1;
@@ -81,7 +88,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                 height: newHeight,
                 x: newX,
                 y: newY
-            });
+            }, false);
         };
 
         const onMouseUp = () => {
@@ -99,12 +106,35 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         e.stopPropagation();
         e.preventDefault();
 
-        setSelectedId(node.id);
+        const state = useStore.getState();
+        let currentSelectedIds = state.selectedIds;
+
+        if (!isSelected) {
+            currentSelectedIds = [node.id];
+            setSelectedIds(currentSelectedIds);
+        }
 
         const startX = e.clientX;
         const startY = e.clientY;
         const startXPos = typeof node.x === 'number' ? node.x : 0;
         const startYPos = typeof node.y === 'number' ? node.y : 0;
+
+        // Gather initial positions for all selected widgets
+        const initialPositions = new Map<string, { x: number, y: number }>();
+        const gatherPositions = (nodes: WidgetNode[]) => {
+            nodes.forEach(n => {
+                if (currentSelectedIds.includes(n.id)) {
+                    initialPositions.set(n.id, {
+                        x: typeof n.x === 'number' ? n.x : 0,
+                        y: typeof n.y === 'number' ? n.y : 0
+                    });
+                }
+                if (n.children) gatherPositions(n.children);
+            });
+        };
+        gatherPositions(state.widgets);
+
+        let hasMoved = false;
 
         const onMouseMove = (moveEvent: MouseEvent) => {
             const areaEl = document.querySelector('.lvgl-screen');
@@ -114,11 +144,22 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             const deltaX = (moveEvent.clientX - startX) / scale;
             const deltaY = (moveEvent.clientY - startY) / scale;
 
-            const x = snapValue(startXPos + deltaX);
-            const y = snapValue(startYPos + deltaY);
+            // Only push history once for the drag action
+            if (deltaX !== 0 || deltaY !== 0) {
+                if (!hasMoved) {
+                    useStore.getState().pushHistory();
+                    hasMoved = true;
+                }
 
-            if (node.x !== x || node.y !== y) {
-                updateWidget(node.id, { x, y });
+                // Move all selected widgets
+                currentSelectedIds.forEach(id => {
+                    const pos = initialPositions.get(id);
+                    if (pos) {
+                        const newX = snapValue(pos.x + deltaX);
+                        const newY = snapValue(pos.y + deltaY);
+                        updateWidget(id, { x: newX, y: newY }, false);
+                    }
+                });
             }
         };
 
@@ -128,30 +169,33 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
 
             if (!containerRef.current) return;
 
-            // Temporarily ignore the dragged element to find what's underneath
-            const originalPointerEvents = containerRef.current.style.pointerEvents;
-            containerRef.current.style.pointerEvents = 'none';
+            // Handle grouping/dropping logic only for single selections or the primary drag node for now
+            if (currentSelectedIds.length === 1) {
+                // Temporarily ignore the dragged element to find what's underneath
+                const originalPointerEvents = containerRef.current.style.pointerEvents;
+                containerRef.current.style.pointerEvents = 'none';
 
-            const dropEl = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
-            const targetWidget = dropEl?.closest('.widget-node') as HTMLElement;
-            const targetId = targetWidget?.getAttribute('data-widget-id');
-            const canvasEl = dropEl?.closest('.lvgl-screen');
+                const dropEl = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+                const targetWidget = dropEl?.closest('.widget-node') as HTMLElement;
+                const targetId = targetWidget?.getAttribute('data-widget-id');
+                const canvasEl = dropEl?.closest('.lvgl-screen');
 
-            // Restore pointer events
-            containerRef.current.style.pointerEvents = originalPointerEvents;
+                // Restore pointer events
+                containerRef.current.style.pointerEvents = originalPointerEvents;
 
-            if (targetId && targetId !== node.id && targetId !== parentId) {
-                // Drop into a new container
-                useStore.getState().moveWidget(node.id, targetId, 0);
-            } else if (canvasEl && !targetWidget && parentId !== null) {
-                // Explicitly dropped on canvas background (no other widget beneath)
-                useStore.getState().moveWidget(node.id, null, 0);
+                if (targetId && targetId !== node.id && targetId !== parentId) {
+                    // Drop into a new container
+                    useStore.getState().moveWidget(node.id, targetId, 0);
+                } else if (canvasEl && !targetWidget && parentId !== null) {
+                    // Explicitly dropped on canvas background (no other widget beneath)
+                    useStore.getState().moveWidget(node.id, null, 0);
+                }
             }
         };
 
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
-    }, [node.id, node.x, node.y, parentId, isResizing, updateWidget, setSelectedId, canvasConfig, snapValue]);
+    }, [node.id, node.x, node.y, parentId, isResizing, updateWidget, setSelectedIds, canvasConfig, snapValue, isSelected]);
 
     const [{ isDragging }, dragRef, dragPreview] = useDrag({
         type: 'widget',
@@ -207,7 +251,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             }
 
             if (!item.id && item.type) {
-                const newWidget = {
+                const newWidget: WidgetNode = {
                     id: uuidv4(),
                     type: item.type as any,
                     name: `${item.type}_${Date.now().toString().slice(-4)}`,
@@ -215,10 +259,16 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     width: item.type === 'slider' || item.type === 'bar' ? 150 : 100,
                     height: item.type === 'slider' || item.type === 'bar' ? 20 : 40,
                     text: item.type === 'label' || item.type === 'button' ? `${item.type}` : undefined,
+                    range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 0 : undefined,
+                    range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 100 : undefined,
+                    value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 50 : undefined,
+                    start_angle: item.type === 'arc' ? 135 : undefined,
+                    end_angle: item.type === 'arc' ? 45 : undefined,
+                    checkable: item.type === 'switch' ? true : undefined,
                     children: []
                 };
                 useStore.getState().addWidget(node.id, newWidget);
-                useStore.getState().setSelectedId(newWidget.id);
+                useStore.getState().setSelectedIds([newWidget.id]);
             }
         },
         collect: (monitor) => ({
@@ -234,11 +284,31 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
 
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        setSelectedId(node.id);
+        if (node.type === 'page') {
+            setSelectedIds([]);
+            return;
+        }
+        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            if (isSelected) {
+                setSelectedIds(selectedIds.filter(id => id !== node.id));
+            } else {
+                setSelectedIds([...selectedIds, node.id]);
+            }
+        } else {
+            setSelectedIds([node.id]);
+        }
     };
 
     // Map LVGL styles to CSS React styles
-    const s = node.styles || {};
+    const s: StyleProperties = {
+        ...(node.class_names?.reduce((acc, className) => {
+            if (global_styles[className]) {
+                return { ...acc, ...global_styles[className] };
+            }
+            return acc;
+        }, {} as StyleProperties) || {}),
+        ...(node.styles || {})
+    };
     const getStyles = (): React.CSSProperties => {
 
         // Handle background color with opacity
@@ -303,6 +373,11 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             boxShadow = `${ox}px ${oy}px ${s.shadow_width}px ${color}`;
         }
 
+        const isLabelOrButton = node.type === 'label' || node.type === 'button';
+        const isContainer = node.type === 'object' || node.type === 'page';
+
+        const effectiveDisplay = node.hidden ? 'none' : (isFlex ? 'flex' : (isGrid ? 'grid' : (isLabelOrButton ? 'flex' : 'block')));
+
         const styles: React.CSSProperties = {
             position: (isRoot || parentLayout === 'flex' || parentLayout === 'grid' || isFlex || isGrid) ? 'relative' : 'absolute',
             left: isRoot ? 0 : (node.x !== undefined ? processDim(node.x) : undefined),
@@ -311,31 +386,34 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             height: isRoot ? '100%' : processDim(node.height),
             backgroundColor: bgColor,
             color: s.text_color || '#ffffff',
-            borderColor: s.border_color || 'transparent',
-            borderWidth: s.border_width ? `${s.border_width}px` : 0,
-            borderStyle: s.border_width ? 'solid' : 'none',
+            textAlign: s.text_align ? (s.text_align.toLowerCase() as any) : 'left',
+            // Default border for objects in editor to make them visible
+            borderWidth: s.border_width ? `${s.border_width}px` : (node.type === 'object' ? '1px' : 0),
+            borderStyle: s.border_width ? 'solid' : (node.type === 'object' ? 'dashed' : 'none'),
+            borderColor: s.border_color || (node.type === 'object' ? 'hsl(var(--primary) / 0.3)' : 'transparent'),
             borderRadius: s.radius ? `${s.radius}px` : 0,
             paddingTop: s.pad_top ?? s.pad_all ?? 0,
             paddingBottom: s.pad_bottom ?? s.pad_all ?? 0,
             paddingLeft: s.pad_left ?? s.pad_all ?? 0,
             paddingRight: s.pad_right ?? s.pad_all ?? 0,
             boxShadow,
-            display: isFlex ? 'flex' : (isGrid ? 'grid' : 'block'),
-            flexDirection: isFlex ? ((nodeLayout.flex_flow && flexFlowMap[nodeLayout.flex_flow]?.split(' ')[0] as any) || 'row') : undefined,
-            flexWrap: isFlex ? ((nodeLayout.flex_flow && flexFlowMap[nodeLayout.flex_flow]?.includes('wrap') ? 'wrap' : 'nowrap') as any) : undefined,
-            alignItems: isFlex ? ((nodeLayout.flex_align_cross && flexAlignCrossMap[nodeLayout.flex_align_cross]) || 'stretch') : undefined,
-            justifyContent: isFlex ? ((nodeLayout.flex_align_main && flexAlignMainMap[nodeLayout.flex_align_main]) || 'flex-start') : undefined,
+            display: effectiveDisplay,
+            flexDirection: (isFlex || isLabelOrButton) ? ((nodeLayout.flex_flow && flexFlowMap[nodeLayout.flex_flow]?.split(' ')[0] as any) || 'row') : undefined,
+            flexWrap: (isFlex || isLabelOrButton) ? ((nodeLayout.flex_flow && flexFlowMap[nodeLayout.flex_flow]?.includes('wrap') ? 'wrap' : 'nowrap') as any) : undefined,
+            alignItems: (isFlex || isLabelOrButton) ? ((nodeLayout.flex_align_cross && flexAlignCrossMap[nodeLayout.flex_align_cross]) || 'center') : undefined,
+            justifyContent: isFlex ? ((nodeLayout.flex_align_main && flexAlignMainMap[nodeLayout.flex_align_main]) || 'flex-start') :
+                (isLabelOrButton ? (s.text_align === 'CENTER' ? 'center' : (s.text_align === 'RIGHT' ? 'flex-end' : 'flex-start')) : undefined),
             gridTemplateColumns: isGrid ? (nodeLayout.grid_dsc_cols?.map(c => processDim(c)).join(' ') || '1fr') : undefined,
             gridTemplateRows: isGrid ? (nodeLayout.grid_dsc_rows?.map(r => processDim(r)).join(' ') || '1fr') : undefined,
             flexGrow: nodeLayout.flex_grow || 0,
             gap: `${nodeLayout.pad_row || 0}px ${nodeLayout.pad_column || 0}px`,
-            cursor: isRoot ? 'default' : 'move',
+            cursor: (isRoot ? 'default' : 'move'),
             outline: isOver ? '2px dashed var(--text-accent)' : 'none',
             outlineOffset: '-1px',
             zIndex: isRoot ? 1 : (isSelected ? 100 : 10),
-            opacity: isDragging ? 0.5 : 1,
+            opacity: isDragging ? 0.5 : (node.hidden ? 0.4 : 1),
             overflow: 'visible',
-            fontFamily: typeof s.text_font === 'string' ? s.text_font : 'inherit',
+            fontFamily: typeof s.text_font === 'string' ? `"${s.text_font}", sans-serif` : 'inherit',
         };
 
         // Grid child positioning
@@ -394,7 +472,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         const fontAsset = assets.find(a => a.type === 'font' && a.value === s.text_font);
         const fontSize = fontAsset?.size ? `${fontAsset.size}px` : undefined;
         const fontWeight = (s.text_font?.toLowerCase().includes('bold') || (fontAsset?.name?.toLowerCase().includes('bold'))) ? 'bold' : 'normal';
-        const fontFamily = fontAsset?.fontFamily || s.text_font;
+        const fontFamily = fontAsset?.family ? `"${fontAsset.family}", sans-serif` : (typeof s.text_font === 'string' ? `"${s.text_font}", sans-serif` : 'inherit');
 
         // Simple check for MDI icon pattern or common ESPHome icon escapes
         // If it starts with mdi: or is a single character (or surrogate pair) in the icon range
@@ -415,14 +493,192 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                         return <span style={{ fontSize: fontSize || '1.2em', fontFamily: '"Material Design Icons", sans-serif' }}>{text}</span>;
                     }
                 }
-                return <span style={{ fontFamily, fontSize, fontWeight }}>{text}</span>;
-            case 'arc':
-                return <div style={{ border: '4px solid #fff', borderRadius: '50%', width: '100%', height: '100%' }} />;
+                return <span style={{ fontFamily, fontSize, fontWeight, textAlign: s.text_align ? (s.text_align.toLowerCase() as any) : 'inherit', width: '100%' }}>{text}</span>;
+            case 'arc': {
+                const start = node.start_angle ?? 135;
+                const end = node.end_angle ?? 45;
+                const min = node.range_min ?? 0;
+                const max = node.range_max ?? 100;
+                const val = node.value ?? 0;
+                const rot = node.rotation ?? 0;
+
+                // Simple SVG arc visualization
+                // Map angles to coordinates (0 deg is 3 o'clock, clockwise)
+                const polarToCartesian = (cx: number, cy: number, r: number, angle: number) => {
+                    const rad = (angle * Math.PI) / 180.0;
+                    return {
+                        x: cx + (r * Math.cos(rad)),
+                        y: cy + (r * Math.sin(rad))
+                    };
+                };
+
+                const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
+                    const start = polarToCartesian(x, y, radius, endAngle);
+                    const end = polarToCartesian(x, y, radius, startAngle);
+                    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+                    return [
+                        "M", start.x, start.y,
+                        "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+                    ].join(" ");
+                };
+
+                const r = 40;
+                const cx = 50;
+                const cy = 50;
+
+                // Calculate current value angle
+                const totalRange = (end < start) ? (360 - start + end) : (end - start);
+                const valPercent = (val - min) / (max - min);
+                const valAngle = start + (totalRange * valPercent);
+
+                return (
+                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: `rotate(${rot}deg)` }}>
+                        {/* Background Arc */}
+                        <path
+                            d={describeArc(cx, cy, r, start, end)}
+                            fill="none"
+                            stroke={s.bg_color || '#444'}
+                            strokeWidth={s.arc_width || 4}
+                            strokeLinecap="round"
+                        />
+                        {/* Indicator Arc */}
+                        <path
+                            d={describeArc(cx, cy, r, start, valAngle)}
+                            fill="none"
+                            stroke={s.arc_color || '#007acc'}
+                            strokeWidth={s.arc_width || 4}
+                            strokeLinecap="round"
+                        />
+                    </svg>
+                );
+            }
             case 'bar':
-            case 'slider':
-                return <div style={{ background: '#555', width: '100%', height: '100%', borderRadius: '4px' }}><div style={{ background: '#007acc', width: '50%', height: '100%', borderRadius: '4px' }} /></div>;
-            case 'switch':
-                return <div style={{ background: '#555', width: '40px', height: '20px', borderRadius: '10px', position: 'relative' }}><div style={{ background: '#fff', width: '16px', height: '16px', borderRadius: '50%', position: 'absolute', top: '2px', left: '2px' }} /></div>;
+            case 'slider': {
+                const min = node.range_min ?? 0;
+                const max = node.range_max ?? 100;
+                const val = node.value ?? 0;
+                const percent = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
+
+                return (
+                    <div style={{ background: s.bg_color || '#555', width: '100%', height: '100%', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{
+                            background: s.arc_color || '#007acc',
+                            width: `${percent}%`,
+                            height: '100%',
+                            transition: 'width 0.2s'
+                        }} />
+                        {node.type === 'slider' && (
+                            <div style={{
+                                position: 'absolute',
+                                left: `${percent}%`,
+                                top: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                width: '12px',
+                                height: '24px',
+                                background: '#fff',
+                                borderRadius: '4px',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                zIndex: 2
+                            }} />
+                        )}
+                    </div>
+                );
+            }
+            case 'switch': {
+                const active = node.checked;
+                return (
+                    <div style={{
+                        background: active ? (s.arc_color || '#007acc') : (s.bg_color || '#555'),
+                        width: '40px',
+                        height: '24px',
+                        borderRadius: '12px',
+                        position: 'relative',
+                        transition: 'background 0.2s'
+                    }}>
+                        <div style={{
+                            background: '#fff',
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            position: 'absolute',
+                            top: '3px',
+                            left: active ? '19px' : '3px',
+                            transition: 'left 0.2s',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.4)'
+                        }} />
+                    </div>
+                );
+            }
+            case 'checkbox': {
+                const active = node.checked;
+                const text = resolveValue(node.text || '');
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%', width: '100%' }}>
+                        <div style={{
+                            width: '20px', height: '20px', borderRadius: '4px', border: `2px solid ${s.arc_color || '#007acc'}`,
+                            background: active ? (s.arc_color || '#007acc') : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                            {active && <span style={{ color: '#fff', fontSize: '14px' }}>✓</span>}
+                        </div>
+                        <span style={{ color: s.text_color || '#fff', fontSize: fontSize || '14px', fontFamily }}>{text}</span>
+                    </div>
+                );
+            }
+            case 'spinbox': {
+                const val = node.value ?? 0;
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: s.bg_color || '#333', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ padding: '0 8px', background: '#444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>-</div>
+                        <div style={{ flex: 1, textAlign: 'center', color: s.text_color || '#fff' }}>{val}</div>
+                        <div style={{ padding: '0 8px', background: '#444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>+</div>
+                    </div>
+                );
+            }
+            case 'dropdown': {
+                const options = node.options?.split('\n') || ['Option 1'];
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: s.bg_color || '#333', borderRadius: '4px', padding: '0 8px', justifyContent: 'space-between' }}>
+                        <span style={{ color: s.text_color || '#fff' }}>{options[0]}</span>
+                        <span style={{ color: s.text_color || '#fff' }}>▼</span>
+                    </div>
+                );
+            }
+            case 'roller': {
+                const options = node.options?.split('\n') || ['Opt 1', 'Opt 2', 'Opt 3'];
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', background: s.bg_color || '#333', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                        <div style={{ color: s.text_color || '#888', opacity: 0.5, fontSize: '0.8em' }}>{options[0]}</div>
+                        <div style={{ color: s.text_color || '#fff', borderTop: `1px solid ${s.arc_color || '#007acc'}`, borderBottom: `1px solid ${s.arc_color || '#007acc'}`, width: '100%', textAlign: 'center', padding: '4px 0', margin: '4px 0' }}>{options[1] || options[0]}</div>
+                        <div style={{ color: s.text_color || '#888', opacity: 0.5, fontSize: '0.8em' }}>{options[2] || ''}</div>
+                    </div>
+                );
+            }
+            case 'textarea': {
+                const text = resolveValue(node.text || 'Textarea...');
+                return (
+                    <div style={{ width: '100%', height: '100%', background: s.bg_color || '#222', color: s.text_color || '#ccc', padding: '8px', borderRadius: '4px', border: '1px solid #444', overflow: 'hidden', whiteSpace: 'pre-wrap', fontFamily }}>
+                        {text}
+                    </div>
+                );
+            }
+            case 'led': {
+                const active = node.checked;
+                const ledColor = active ? (s.bg_color || '#ff0000') : '#333';
+                const shadow = active ? `0 0 10px ${ledColor}, inset 0 0 5px rgba(255,255,255,0.5)` : 'inset 0 2px 4px rgba(0,0,0,0.5)';
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+                        <div style={{
+                            width: 'min(100%, 100%)',
+                            aspectRatio: '1',
+                            borderRadius: '50%',
+                            background: ledColor,
+                            boxShadow: shadow,
+                            transition: 'all 0.2s'
+                        }} />
+                    </div>
+                );
+            }
             case 'page':
             case 'object':
             default:

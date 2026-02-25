@@ -1,21 +1,8 @@
 :root {
-  /* HSL Color Palette - Sophisticated Dark Mode */
-  --bg-base: 220 15% 5%;
-  --bg-surface: 220 15% 10%;
-  --bg-surface-elevated: 220 15% 15%;
-  --bg-glass: rgba(20, 22, 26, 0.7);
-
+  /* Shared Tokens */
   --primary: 210 100% 50%;
   --primary-glow: hsla(210, 100%, 50%, 0.3);
   --accent: 280 100% 65%;
-
-  --text-main: 210 20% 95%;
-  --text-muted: 210 10% 65%;
-  --text-dim: 210 10% 45%;
-
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-muted: rgba(255, 255, 255, 0.15);
-  --border-accent: hsla(210, 100%, 50%, 0.5);
 
   /* Design Tokens */
   --sidebar-w: 300px;
@@ -26,6 +13,44 @@
   --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.4);
   --glass-blur: 16px;
   --transition-fast: 0.15s ease;
+}
+
+.theme-dark {
+  --bg-base: 220 12% 12%;
+  --bg-surface: 220 12% 16%;
+  --bg-surface-elevated: 220 12% 20%;
+  --bg-glass: rgba(30, 32, 38, 0.7);
+
+  --text-main: 210 20% 95%;
+  --text-muted: 210 10% 65%;
+  --text-dim: 210 10% 45%;
+
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-muted: rgba(255, 255, 255, 0.15);
+  --border-accent: hsla(210, 100%, 50%, 0.5);
+
+  --code-bg: #0d1117;
+  --code-text: #e6edf3;
+  --canvas-grid: rgba(255, 255, 255, 0.05);
+}
+
+.theme-light {
+  --bg-base: 210 20% 98%;
+  --bg-surface: 210 20% 94%;
+  --bg-surface-elevated: 210 20% 88%;
+  --bg-glass: rgba(255, 255, 255, 0.8);
+
+  --text-main: 210 24% 12%;
+  --text-muted: 210 12% 35%;
+  --text-dim: 210 12% 55%;
+
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-muted: rgba(0, 0, 0, 0.15);
+  --border-accent: hsla(210, 100%, 50%, 0.4);
+
+  --code-bg: #f6f8fa;
+  --code-text: #24292f;
+  --canvas-grid: rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -56,7 +81,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: var(--bg-glass);
+  background: hsl(var(--bg-base));
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-bottom: 1px solid var(--border-subtle);
@@ -92,7 +117,7 @@ body {
 
 /* Sidebar Styling */
 .sidebar {
-  background: var(--bg-glass);
+  background: hsl(var(--bg-surface));
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-right: 1px solid var(--border-subtle);
@@ -272,7 +297,7 @@ body {
   flex: 1;
   overflow: auto;
   padding: 0;
-  background: #0d1117;
+  background: var(--code-bg);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -282,7 +307,7 @@ body {
   font-family: "Material Design Icons", 'Fira Code', 'Roboto Mono', 'Source Code Pro', monospace;
   font-size: 0.95rem;
   line-height: 1.6;
-  color: #e6edf3;
+  color: var(--code-text);
   white-space: pre-wrap;
   tab-size: 2;
 }
@@ -350,7 +375,7 @@ body {
   align-items: center;
   justify-content: center;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
+    radial-gradient(circle at 1px 1px, var(--canvas-grid) 1px, transparent 0);
   background-size: 24px 24px;
 }
 
@@ -876,4 +901,19 @@ body {
 .tree-item.drop-target {
   background: rgba(var(--primary), 0.1);
   outline: 1px dashed hsl(var(--primary));
+}
+
+.simulator-view {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1b1e;
+  overflow: hidden;
+}
+
+.simulator-view .lvgl-screen {
+  box-shadow: none !important;
+  border: none !important;
 }
