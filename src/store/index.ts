@@ -159,6 +159,9 @@ export const useStore = create<EditorState>((set) => ({
     emulatorOpen: false,
     setEmulatorOpen: (emulatorOpen) => set({ emulatorOpen }),
 
+    assetManagerOpen: false,
+    setAssetManagerOpen: (assetManagerOpen) => set({ assetManagerOpen }),
+
     // History
     past: [],
     future: [],

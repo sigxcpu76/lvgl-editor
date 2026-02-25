@@ -16,7 +16,7 @@ import { EmulatorModal } from './components/emulator/EmulatorModal';
 import './App.css';
 
 function App() {
-    const { loadState, widgets, assets, substitutions, copySelectedWidget, pasteWidget, undo, redo, canUndo, canRedo, resetState, selectedIds, removeWidget, moveSelectedWidgets, gridConfig, theme, setTheme, setRawYaml, setEmulatorOpen } = useStore();
+    const { loadState, widgets, assets, substitutions, copySelectedWidget, pasteWidget, undo, redo, canUndo, canRedo, resetState, selectedIds, removeWidget, moveSelectedWidgets, gridConfig, theme, setTheme, setRawYaml, setEmulatorOpen, assetManagerOpen, setAssetManagerOpen } = useStore();
     const [treeHeight, setTreeHeight] = React.useState(300);
     const [isResizingTree, setIsResizingTree] = React.useState(false);
     const [showPreview, setShowPreview] = React.useState(false);
@@ -171,6 +171,14 @@ function App() {
                         <CanvasSettings />
                         <StyleEditorModal />
                         <ThemeToggle />
+                        <button
+                            className="btn-icon"
+                            style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px' }}
+                            onClick={() => setAssetManagerOpen(true)}
+                            title="Assets"
+                        >
+                            <span className="mdi mdi-folder-multiple-image" />
+                        </button>
 
                         <div className="setting-divider" style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
 
@@ -265,22 +273,10 @@ function App() {
                     </section>
 
                     <aside className="sidebar right-sidebar">
-                        <div className="sidebar-section properties-section">
+                        <div className="sidebar-section properties-section" style={{ flex: 1 }}>
                             <div className="sidebar-header">Properties</div>
                             <div className="scrollable" style={{ flex: 1 }}>
                                 <PropertiesPanel />
-                            </div>
-                        </div>
-
-                        <div
-                            className={`sidebar-resizer-h ${isResizingTree ? 'active' : ''}`}
-                            onMouseDown={startResizing}
-                        />
-
-                        <div className="sidebar-section asset-section" style={{ height: treeHeight, flex: '0 0 auto', display: 'flex', flexDirection: 'column' }}>
-                            <div className="sidebar-header" style={{ borderTop: '1px solid var(--border-subtle)' }}>Asset Management</div>
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                                <AssetManager />
                             </div>
                         </div>
                     </aside>
@@ -295,6 +291,7 @@ function App() {
                 )}
 
                 <EmulatorModal />
+                <AssetManager />
             </div>
         </DndProvider>
     );

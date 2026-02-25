@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useStore } from '../../store';
 
 interface YamlPreviewProps {
     yaml: string;
@@ -91,6 +93,7 @@ const Highlight: React.FC<{ code: string }> = ({ code }) => {
 
 export const YamlPreview: React.FC<YamlPreviewProps> = ({ yaml, onClose, onDownload }) => {
     const [copied, setCopied] = useState(false);
+    const { theme } = useStore();
 
     const handleCopy = () => {
         navigator.clipboard.writeText(yaml);
@@ -98,10 +101,10 @@ export const YamlPreview: React.FC<YamlPreviewProps> = ({ yaml, onClose, onDownl
         setTimeout(() => setCopied(false), 2000);
     };
 
-    return (
-        <div className="modal-overlay">
+    return createPortal(
+        <div className={`modal-overlay theme-${theme}`}>
             <div className="modal-content yaml-preview-modal">
-                <div className="modal-header">
+                <div className="modal-header" style={{ background: 'hsl(var(--bg-surface-elevated))' }}>
                     <h2>YAML Preview</h2>
                     <button className="btn-close" onClick={onClose}>×</button>
                 </div>
@@ -110,7 +113,7 @@ export const YamlPreview: React.FC<YamlPreviewProps> = ({ yaml, onClose, onDownl
                         <code><Highlight code={yaml} /></code>
                     </pre>
                 </div>
-                <div className="modal-footer">
+                <div className="modal-footer" style={{ background: 'hsl(var(--bg-surface-elevated))' }}>
                     <button className={`btn ${copied ? 'primary' : 'secondary'}`} onClick={handleCopy}>
                         {copied ? 'Copied!' : 'Copy to Clipboard'}
                     </button>
@@ -123,5 +126,5 @@ export const YamlPreview: React.FC<YamlPreviewProps> = ({ yaml, onClose, onDownl
                 </div>
             </div>
         </div>
-    );
+        , document.body);
 };

@@ -178,4 +178,8 @@ export interface EditorState {
     // Emulator State
     emulatorOpen: boolean;
     setEmulatorOpen: (open: boolean) => void;
+
+    // Asset Manager State
+    assetManagerOpen: boolean;
+    setAssetManagerOpen: (open: boolean) => void;
 }

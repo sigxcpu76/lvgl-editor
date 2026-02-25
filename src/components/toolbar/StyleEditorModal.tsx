@@ -6,7 +6,7 @@ import { StyleProperties } from '../../types';
 export const StyleEditorModal: React.FC = () => {
     const {
         global_styles, updateGlobalStyle, removeGlobalStyle, assets,
-        styleEditorOpen, editingStyleId, closeStyleEditor
+        styleEditorOpen, editingStyleId, closeStyleEditor, theme
     } = useStore();
     const [selectedClass, setSelectedClass] = useState<string | null>(null);
     const [newClassName, setNewClassName] = useState('');
@@ -64,8 +64,8 @@ export const StyleEditorModal: React.FC = () => {
             </button>
 
             {styleEditorOpen && createPortal(
-                <div className="modal-overlay" onClick={closeStyleEditor}>
-                    <div className="yaml-preview-modal" onClick={e => e.stopPropagation()} style={{ width: '600px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+                <div className={`modal-overlay theme-${theme}`} onClick={closeStyleEditor}>
+                    <div className="yaml-preview-modal" onClick={e => e.stopPropagation()} style={{ width: '600px', height: '80vh', display: 'flex', flexDirection: 'column', background: 'hsl(var(--bg-surface-elevated))' }}>
                         <div className="modal-header">
                             <h2>Global Styles Editor</h2>
                             <button className="btn-close" onClick={closeStyleEditor}>×</button>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Asset } from '../../types';
@@ -70,7 +71,7 @@ const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void }>
 };
 
 export const AssetManager: React.FC = () => {
-    const { assets, addAsset, removeAsset } = useStore();
+    const { assets, addAsset, removeAsset, assetManagerOpen, setAssetManagerOpen, theme } = useStore();
     const [name, setName] = useState('');
     const [type, setType] = useState<'icon' | 'font'>('icon');
     const [value, setValue] = useState('');
@@ -114,85 +115,106 @@ export const AssetManager: React.FC = () => {
         setSource('');
     };
 
-    return (
-        <div className="asset-manager-container">
-            <div className="property-group no-border">
-                <div className="prop-row">
-                    <label>Name</label>
-                    <input
-                        type="text"
-                        placeholder="e.g. HomeIcon"
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                    />
+    if (!assetManagerOpen) return null;
+
+    return createPortal(
+        <div className={`modal-overlay theme-${theme}`} onClick={() => setAssetManagerOpen(false)}>
+            <div className="modal-content asset-manager-modal" onClick={e => e.stopPropagation()} style={{ width: '500px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+                <div className="modal-header">
+                    <h2>Asset Management</h2>
+                    <button className="btn-close" onClick={() => setAssetManagerOpen(false)}>×</button>
                 </div>
-                <div className="prop-row">
-                    <label>Type</label>
-                    <select value={type} onChange={e => setType(e.target.value as any)}>
-                        <option value="icon">Icon (MDI)</option>
-                        <option value="font">Font (Custom)</option>
-                    </select>
-                </div>
-                {type === 'icon' ? (
-                    <div className="prop-row">
-                        <label>MDI Name</label>
-                        <input
-                            type="text"
-                            placeholder="home"
-                            value={value}
-                            onChange={e => setValue(e.target.value)}
-                        />
+                <div className="modal-body" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div className="asset-manager-container">
+                        <div className="property-group no-border" style={{ padding: '0 12px 12px 12px' }}>
+                            <div className="prop-row">
+                                <label>Name</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. HomeIcon"
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                />
+                            </div>
+                            <div className="prop-row">
+                                <label>Type</label>
+                                <select value={type} onChange={e => setType(e.target.value as any)}>
+                                    <option value="icon">Icon (MDI)</option>
+                                    <option value="font">Font (Custom)</option>
+                                </select>
+                            </div>
+                            {type === 'icon' ? (
+                                <div className="prop-row">
+                                    <label>MDI Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="home"
+                                        value={value}
+                                        onChange={e => setValue(e.target.value)}
+                                    />
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="prop-row">
+                                        <label>Family</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Roboto"
+                                            value={family}
+                                            onChange={e => setFamily(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="prop-row">
+                                        <label>Size</label>
+                                        <input
+                                            type="number"
+                                            value={size}
+                                            onChange={e => setSize(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="prop-row">
+                                        <label>Source</label>
+                                        <input
+                                            type="text"
+                                            placeholder="gfonts://Roboto"
+                                            value={source}
+                                            onChange={e => setSource(e.target.value)}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                            <button className="btn primary w-full" style={{ marginTop: '8px' }} onClick={handleAdd}>
+                                Add Asset
+                            </button>
+                        </div>
+
+                        <div className="sidebar-header" style={{ background: 'rgba(255,255,255,0.03)', fontSize: '0.65rem', borderTop: '1px solid var(--border-subtle)', padding: '8px 12px' }}>
+                            Active Assets
+                        </div>
+
+                        <div className="asset-list">
+                            {assets.length === 0 ? (
+                                <div className="empty-state" style={{ padding: '20px' }}>No assets added</div>
+                            ) : (
+                                assets.map(asset => (
+                                    <DraggableAsset key={asset.id} asset={asset} onRemove={removeAsset} />
+                                ))
+                            )}
+                        </div>
                     </div>
-                ) : (
-                    <>
-                        <div className="prop-row">
-                            <label>Family</label>
-                            <input
-                                type="text"
-                                placeholder="Roboto"
-                                value={family}
-                                onChange={e => setFamily(e.target.value)}
-                            />
-                        </div>
-                        <div className="prop-row">
-                            <label>Size</label>
-                            <input
-                                type="number"
-                                value={size}
-                                onChange={e => setSize(e.target.value)}
-                            />
-                        </div>
-                        <div className="prop-row">
-                            <label>Source</label>
-                            <input
-                                type="text"
-                                placeholder="gfonts://Roboto"
-                                value={source}
-                                onChange={e => setSource(e.target.value)}
-                            />
-                        </div>
-                    </>
-                )}
-                <button className="btn primary w-full" style={{ marginTop: '8px' }} onClick={handleAdd}>
-                    Add Asset
-                </button>
+                </div>
+                <div className="modal-footer">
+                    <button className="btn secondary" onClick={() => setAssetManagerOpen(false)}>Close</button>
+                </div>
             </div>
-
-            <div className="sidebar-header" style={{ background: 'rgba(255,255,255,0.03)', fontSize: '0.65rem', borderTop: '1px solid var(--border-subtle)' }}>
-                Active Assets
-            </div>
-
-            <div className="asset-list">
-                {assets.length === 0 ? (
-                    <div className="empty-state" style={{ padding: '20px' }}>No assets added</div>
-                ) : (
-                    assets.map(asset => (
-                        <DraggableAsset key={asset.id} asset={asset} onRemove={removeAsset} />
-                    ))
-                )}
-            </div>
-
             <style>{`
+                .asset-manager-modal {
+                    background: hsl(var(--bg-surface-elevated));
+                    border-radius: var(--radius-lg);
+                    border: 1px solid var(--border-subtle);
+                    box-shadow: var(--shadow-xl);
+                    overflow: hidden;
+                }
                 .asset-manager-container {
                     display: flex;
                     flex-direction: column;
@@ -203,6 +225,7 @@ export const AssetManager: React.FC = () => {
                     flex: 1;
                     overflow-y: auto;
                     padding: 12px;
+                    min-height: 200px;
                 }
                 .asset-mini-card {
                     display: flex;
@@ -257,6 +280,7 @@ export const AssetManager: React.FC = () => {
                 .w-full { width: 100%; }
                 .no-border { border: none !important; }
             `}</style>
-        </div>
+        </div>,
+        document.body
     );
 };
