@@ -55,6 +55,20 @@ npm run package
 ```
 *Note: Distribution files will be generated in the `release/` directory.*
 
+## 🐧 Linux Troubleshooting
+
+If you encounter a FUSE error when running the AppImage (e.g. `fusermount: mount failed: Operation not permitted`), you have two options:
+
+1. **Install libfuse2**:
+   ```bash
+   sudo apt install libfuse2  # For Ubuntu/Debian
+   ```
+
+2. **Run without mounting**:
+   ```bash
+   ./LVGL-Editor-x.x.x.AppImage --appimage-extract-and-run
+   ```
+
 ## 🛠️ Tech Stack
 
 - **Core**: [Electron](https://www.electronjs.org/)

@@ -2,6 +2,7 @@
   /* Shared Tokens */
   --primary: 210 100% 50%;
   --primary-glow: hsla(210, 100%, 50%, 0.3);
+  --error: 0 84% 60%;
   --accent: 280 100% 65%;
 
   /* Design Tokens */

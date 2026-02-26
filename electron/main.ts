@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron'
 import * as fs from 'fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -46,10 +46,16 @@ const menu = Menu.buildFromTemplate(template)
 Menu.setApplicationMenu(menu)
 
 function createWindow() {
+    console.log('Creating window...', {
+        VITE_DEV_SERVER_URL,
+        RENDERER_DIST,
+        preloadPath: path.join(__dirname, 'preload.js')
+    });
+
     win = new BrowserWindow({
         width: 1280,
         height: 800,
-        icon: path.join(VITE_PUBLIC, 'electron-vite.svg'),
+        // icon: path.join(VITE_PUBLIC, 'electron-vite.svg'), // Removed missing icon
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -70,7 +76,9 @@ function createWindow() {
         win.loadURL(VITE_DEV_SERVER_URL)
         win.webContents.openDevTools()
     } else {
-        win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+        const indexPath = path.join(RENDERER_DIST, 'index.html')
+        console.log('Loading production file:', indexPath)
+        win.loadURL(pathToFileURL(indexPath).toString())
     }
 }
 

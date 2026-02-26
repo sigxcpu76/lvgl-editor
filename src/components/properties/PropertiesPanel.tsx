@@ -2,9 +2,169 @@ import React from 'react';
 import { useStore } from '../../store';
 import { WidgetType, StyleProperties, WidgetNode } from '../../types';
 
+const ACTION_TEMPLATES: Record<string, any> = {
+    'homeassistant.service': {
+        service: 'homeassistant.toggle',
+        data: { entity_id: '' }
+    },
+    'lvgl.label.update': {
+        id: '',
+        text: ''
+    },
+    'lvgl.widget.update': {
+        id: '',
+        state: { checked: true }
+    },
+    'lvgl.page.show': 'main_page',
+    'light.turn_on': {
+        id: '',
+        brightness: '100%'
+    },
+    'logger.log': 'Action executed',
+    'lambda': 'return;'
+};
+
+const ActionStepEditor: React.FC<{
+    step: any;
+    onChange: (newStep: any) => void;
+}> = ({ step, onChange }) => {
+    const [isRaw, setIsRaw] = React.useState(false);
+
+    // Detect type
+    let actionType = 'custom';
+    let actionValue: any = step;
+
+    if (typeof step === 'object' && step !== null) {
+        const keys = Object.keys(step);
+        if (keys.length === 1 && ACTION_TEMPLATES[keys[0]] !== undefined) {
+            actionType = keys[0];
+            actionValue = step[keys[0]];
+        }
+    }
+
+    const handleTypeChange = (newType: string) => {
+        if (newType === 'custom') {
+            onChange({});
+        } else {
+            onChange({ [newType]: ACTION_TEMPLATES[newType] });
+        }
+    };
+
+    const handleFieldChange = (key: string, val: any) => {
+        if (actionType === 'custom') {
+            onChange(val);
+            return;
+        }
+
+        if (typeof actionValue === 'object' && actionValue !== null) {
+            onChange({ [actionType]: { ...actionValue, [key]: val } });
+        } else {
+            onChange({ [actionType]: val });
+        }
+    };
+
+    if (isRaw) {
+        return (
+            <div className="action-step-editor-raw">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                    <button onClick={() => setIsRaw(false)} style={{ fontSize: '0.65rem', padding: '2px 4px', background: 'hsl(var(--bg-base))', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-muted))', borderRadius: '4px', cursor: 'pointer' }}>Form Mode</button>
+                </div>
+                <textarea
+                    value={typeof step === 'string' ? step : JSON.stringify(step, null, 2)}
+                    onChange={(e) => {
+                        try {
+                            const val = e.target.value;
+                            if (val.trim().startsWith('{') || val.trim().startsWith('[')) {
+                                onChange(JSON.parse(val));
+                            } else {
+                                onChange(val);
+                            }
+                        } catch (err) {
+                            onChange(e.target.value);
+                        }
+                    }}
+                    style={{ width: '100%', minHeight: '80px', background: 'hsl(var(--bg-base))', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-main))', fontSize: '0.75rem', fontFamily: 'monospace', padding: '8px', borderRadius: '4px' }}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div className="action-step-editor-form" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <select
+                    value={actionType}
+                    onChange={(e) => handleTypeChange(e.target.value)}
+                    style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        padding: '4px',
+                        background: 'hsl(var(--bg-surface-elevated))',
+                        color: 'hsl(var(--text-main))',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '4px'
+                    }}
+                >
+                    <option value="custom">Custom/Raw</option>
+                    {Object.keys(ACTION_TEMPLATES).map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={() => setIsRaw(true)} style={{ fontSize: '0.65rem', padding: '4px', background: 'transparent', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-muted))', borderRadius: '4px', cursor: 'pointer' }}>JSON</button>
+            </div>
+
+            {actionType !== 'custom' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '8px', borderLeft: '2px solid var(--primary)' }}>
+                    {typeof actionValue === 'object' && actionValue !== null ? (
+                        Object.entries(actionValue).map(([k, v]) => (
+                            <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <label style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', fontWeight: 'bold' }}>{k}</label>
+                                {typeof v === 'object' ? (
+                                    <textarea
+                                        value={JSON.stringify(v)}
+                                        onChange={(e) => {
+                                            try { handleFieldChange(k, JSON.parse(e.target.value)); } catch (err) { handleFieldChange(k, e.target.value); }
+                                        }}
+                                        style={{ width: '100%', fontSize: '0.7rem', padding: '4px', background: 'hsl(var(--bg-base))', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-main))', borderRadius: '4px' }}
+                                    />
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={String(v)}
+                                        onChange={(e) => handleFieldChange(k, e.target.value)}
+                                        style={{ width: '100%', fontSize: '0.75rem', padding: '4px', background: 'hsl(var(--bg-base))', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-main))', borderRadius: '4px' }}
+                                    />
+                                )}
+                            </div>
+                        ))
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <label style={{ fontSize: '0.65rem', color: 'hsl(var(--text-muted))', fontWeight: 'bold' }}>Value</label>
+                            {actionType === 'lambda' ? (
+                                <textarea
+                                    value={String(actionValue)}
+                                    onChange={(e) => onChange({ [actionType]: e.target.value })}
+                                    style={{ width: '100%', fontSize: '0.75rem', padding: '4px', minHeight: '60px', background: 'hsl(var(--bg-base))', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-main))', borderRadius: '4px', fontFamily: 'monospace' }}
+                                />
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={String(actionValue)}
+                                    onChange={(e) => onChange({ [actionType]: e.target.value })}
+                                    style={{ width: '100%', fontSize: '0.75rem', padding: '4px', background: 'hsl(var(--bg-base))', border: '1px solid var(--border-subtle)', color: 'hsl(var(--text-main))', borderRadius: '4px' }}
+                                />
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+            {actionType === 'custom' && <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-dim))' }}>Use JSON mode for complex or unknown actions.</div>}
+        </div>
+    );
+};
+
 export const PropertiesPanel: React.FC = () => {
     const { widgets, selectedIds, updateWidget } = useStore();
     const [activeState, setActiveState] = React.useState<string>('DEFAULT');
+    const [newActionInput, setNewActionInput] = React.useState('');
 
     const findSelectedWidget = (): WidgetNode | null => {
         let result: WidgetNode | null = null;
@@ -729,6 +889,132 @@ export const PropertiesPanel: React.FC = () => {
                         />
                     </div>
                 )}
+            </div>
+            <div className="property-group">
+                <h3>Actions ({Object.keys(selectedNode.actions || {}).length})</h3>
+                {selectedNode.actions && Object.entries(selectedNode.actions).map(([trigger, actionSeq]) => (
+                    <div key={trigger} className="action-trigger-group" style={{
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '6px',
+                        padding: '10px',
+                        marginBottom: '10px',
+                        background: 'hsla(var(--bg-surface-elevated), 0.3)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'hsl(var(--text-main))' }}>{trigger}</label>
+                            <button
+                                onClick={() => {
+                                    const newActions = { ...selectedNode.actions };
+                                    delete newActions[trigger];
+                                    handlePropChange('actions', Object.keys(newActions).length > 0 ? newActions : undefined);
+                                }}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'hsl(var(--error))',
+                                    cursor: 'pointer',
+                                    fontSize: '0.7rem',
+                                    padding: '2px 4px'
+                                }}
+                            >
+                                Remove Trigger
+                            </button>
+                        </div>
+
+                        {/* Action Steps */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {(Array.isArray(actionSeq) ? actionSeq : [actionSeq]).map((step, stepIdx) => (
+                                <div key={stepIdx} style={{
+                                    padding: '8px',
+                                    background: 'hsl(var(--bg-surface))',
+                                    borderRadius: '4px',
+                                    borderLeft: '3px solid var(--primary)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-dim))' }}>Step {stepIdx + 1}</span>
+                                        <button
+                                            onClick={() => {
+                                                const newSeq = Array.isArray(actionSeq) ? [...actionSeq] : [actionSeq];
+                                                newSeq.splice(stepIdx, 1);
+                                                handlePropChange('actions', { ...selectedNode.actions, [trigger]: newSeq });
+                                            }}
+                                            style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-muted))', cursor: 'pointer', fontSize: '0.75rem' }}
+                                        >×</button>
+                                    </div>
+                                    <ActionStepEditor
+                                        step={step}
+                                        onChange={(newValue) => {
+                                            const newSeq = Array.isArray(actionSeq) ? [...actionSeq] : [actionSeq];
+                                            newSeq[stepIdx] = newValue;
+                                            handlePropChange('actions', { ...selectedNode.actions, [trigger]: newSeq });
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                            <button
+                                onClick={() => {
+                                    const newSeq = Array.isArray(actionSeq) ? [...actionSeq, {}] : [actionSeq, {}];
+                                    handlePropChange('actions', { ...selectedNode.actions, [trigger]: newSeq });
+                                }}
+                                style={{
+                                    padding: '4px',
+                                    fontSize: '0.7rem',
+                                    background: 'transparent',
+                                    border: '1px dashed var(--border-subtle)',
+                                    color: 'hsl(var(--text-muted))',
+                                    cursor: 'pointer',
+                                    borderRadius: '4px'
+                                }}
+                            >
+                                + Add Step
+                            </button>
+                        </div>
+                    </div>
+                ))}
+
+                <div style={{ marginTop: '12px', display: 'flex', gap: '4px' }}>
+                    <input
+                        type="text"
+                        placeholder="New Trigger (e.g. on_click)"
+                        className="text-input-compact"
+                        value={newActionInput}
+                        onChange={(e) => setNewActionInput(e.target.value)}
+                        style={{
+                            flex: 1,
+                            padding: '6px 8px',
+                            background: 'hsl(var(--bg-surface))',
+                            border: '1px solid var(--border-subtle)',
+                            color: 'hsl(var(--text-main))',
+                            borderRadius: '4px'
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newActionInput) {
+                                handlePropChange('actions', { ...(selectedNode.actions || {}), [newActionInput]: [] });
+                                setNewActionInput('');
+                            }
+                        }}
+                    />
+                    <button
+                        onClick={() => {
+                            if (newActionInput) {
+                                handlePropChange('actions', { ...(selectedNode.actions || {}), [newActionInput]: [] });
+                                setNewActionInput('');
+                            }
+                        }}
+                        style={{
+                            padding: '6px 12px',
+                            fontSize: '0.75rem',
+                            background: 'hsl(var(--primary))',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold'
+                        }}
+                    >
+                        Add
+                    </button>
+                </div>
             </div>
 
             <style>{`

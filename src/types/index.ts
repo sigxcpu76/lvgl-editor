@@ -82,6 +82,7 @@ export interface WidgetNode {
     grid_cell_row_span?: number;
     grid_cell_x_align?: 'start' | 'center' | 'end' | 'stretch';
     grid_cell_y_align?: 'start' | 'center' | 'end' | 'stretch';
+    actions?: Record<string, any>;
     styles?: StyleProperties;
     children: WidgetNode[];
 }

@@ -4,7 +4,7 @@ import { useStore } from '../../store';
 import { Resolution } from '../../types';
 
 export const CanvasSettings: React.FC = () => {
-    const { canvasConfig, setCanvasSize, addCanvasPreset, setZoom, setViewMode, gridConfig, setGridConfig } = useStore();
+    const { canvasConfig, setCanvasSize, addCanvasPreset, setZoom, setViewMode, gridConfig, setGridConfig, theme } = useStore();
     const [customWidth, setCustomWidth] = useState(canvasConfig.width);
     const [customHeight, setCustomHeight] = useState(canvasConfig.height);
     const [showAddPreset, setShowAddPreset] = useState(false);
@@ -51,7 +51,7 @@ export const CanvasSettings: React.FC = () => {
             </button>
 
             {isModalOpen && createPortal(
-                <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+                <div className={`modal-overlay theme-${theme}`} onClick={() => setIsModalOpen(false)}>
                     <div className="yaml-preview-modal" onClick={e => e.stopPropagation()} style={{ width: '380px' }}>
                         <div className="modal-header">
                             <h2>Canvas Settings</h2>

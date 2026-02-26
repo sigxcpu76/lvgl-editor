@@ -240,13 +240,19 @@ export class YamlEngine {
 
         let foundType: WidgetType | null = forceType || null;
         let propsNode: any = null;
+        let actions: Record<string, any> = {};
 
-        for (const pair of yamlMap.items) {
-            const key = String(pair.key?.value || pair.key);
-            if (knownTypes[key]) {
-                foundType = knownTypes[key];
-                propsNode = pair.value;
-                break;
+        // Loop through all items to find type AND capture any on_ actions at this level
+        if (yamlMap.items) {
+            for (const pair of yamlMap.items) {
+                const key = this.resolveText(pair.key);
+                if (knownTypes[key] && !foundType) {
+                    foundType = knownTypes[key];
+                    propsNode = pair.value;
+                }
+                if (key && key.startsWith('on_')) {
+                    actions[key] = pair.value.toJSON ? pair.value.toJSON() : pair.value;
+                }
             }
         }
 
@@ -254,6 +260,16 @@ export class YamlEngine {
         if (!foundType) return null;
 
         const finalPropsNode = (propsNode && (propsNode.type === 'MAP' || propsNode.items)) ? propsNode : yamlMap;
+
+        // If propsNode is a map, also capture actions from it
+        if (finalPropsNode && finalPropsNode !== yamlMap && finalPropsNode.items) {
+            for (const pair of finalPropsNode.items) {
+                const key = this.resolveText(pair.key);
+                if (key && key.startsWith('on_')) {
+                    actions[key] = pair.value.toJSON ? pair.value.toJSON() : pair.value;
+                }
+            }
+        }
 
         let name = `${foundType}_${uuidv4().slice(0, 4)}`;
         let x: number | string = 0;
@@ -430,7 +446,7 @@ export class YamlEngine {
             }
 
             // Recursive children
-            const childrenKeys = ['widgets', 'children'];
+            const childrenKeys = ['widgets', 'children', 'pages'];
             for (const cKey of childrenKeys) {
                 if (finalPropsNode.has(cKey)) {
                     const childNodes = finalPropsNode.get(cKey);
@@ -454,7 +470,8 @@ export class YamlEngine {
             hidden, clickable, checkable, checked,
             long_mode, min_value, max_value, value, range_min, range_max,
             rotation, start_angle, end_angle,
-            style_references: style_references_node
+            style_references: style_references_node,
+            actions
         } as any;
     }
 
@@ -708,6 +725,10 @@ export class YamlEngine {
             if (s.line_color) props.line_color = s.line_color;
             if (s.arc_width !== undefined) props.arc_width = s.arc_width;
             if (s.arc_color) props.arc_color = s.arc_color;
+        }
+
+        if (w.actions) {
+            Object.assign(props, w.actions);
         }
 
         if (w.style_references && w.style_references.length > 0) {
