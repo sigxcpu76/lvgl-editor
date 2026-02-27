@@ -417,6 +417,7 @@ export const useStore = create<EditorState>((set) => ({
 
     loadAssets: (assets) => set({ assets }),
     setSubstitutions: (substitutions) => set({ substitutions }),
+    setGlobalStyles: (global_styles) => set({ global_styles }),
 
     updateGlobalStyle: (className, styles) => set((state) => ({
         global_styles: {

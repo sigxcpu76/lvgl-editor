@@ -16,7 +16,13 @@ import { EmulatorModal } from './components/emulator/EmulatorModal';
 import './App.css';
 
 function App() {
-    const { loadState, widgets, assets, substitutions, copySelectedWidget, pasteWidget, undo, redo, canUndo, canRedo, resetState, selectedIds, removeWidget, moveSelectedWidgets, gridConfig, theme, setTheme, setRawYaml, setEmulatorOpen, assetManagerOpen, setAssetManagerOpen } = useStore();
+    const {
+        loadState, widgets, assets, substitutions, copySelectedWidget, pasteWidget,
+        undo, redo, canUndo, canRedo, resetState, selectedIds, removeWidget,
+        moveSelectedWidgets, gridConfig, theme, setTheme, setRawYaml,
+        setEmulatorOpen, assetManagerOpen, setAssetManagerOpen,
+        openStyleEditor, closeStyleEditor
+    } = useStore();
     const [treeHeight, setTreeHeight] = React.useState(300);
     const [isResizingTree, setIsResizingTree] = React.useState(false);
     const [showPreview, setShowPreview] = React.useState(false);
@@ -29,7 +35,11 @@ function App() {
                 return;
             }
 
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+            if (e.key === 'Escape') {
+                closeStyleEditor();
+                setEmulatorOpen(false);
+                setAssetManagerOpen(false);
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
                 copySelectedWidget();
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
                 pasteWidget();
@@ -53,7 +63,11 @@ function App() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [copySelectedWidget, pasteWidget, undo, redo]);
+    }, [
+        copySelectedWidget, pasteWidget, undo, redo, removeWidget,
+        selectedIds, moveSelectedWidgets, gridConfig, closeStyleEditor,
+        setEmulatorOpen, setAssetManagerOpen
+    ]);
 
     // Load initial state
     React.useEffect(() => {
@@ -63,6 +77,7 @@ function App() {
                 if (data.widgets) useStore.getState().loadState(data.widgets);
                 if (data.assets) useStore.getState().loadAssets(data.assets);
                 if (data.substitutions) useStore.getState().setSubstitutions(data.substitutions);
+                if (data.global_styles) useStore.getState().setGlobalStyles(data.global_styles);
                 // Also optionally config
                 if (data.canvasConfig) useStore.getState().setCanvasSize(data.canvasConfig.width, data.canvasConfig.height);
                 if (data.theme) setTheme(data.theme);
@@ -109,7 +124,7 @@ function App() {
             const content = event.target?.result as string;
             if (content) {
                 try {
-                    const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs } = yamlEngine.parse(content);
+                    const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs, global_styles: loadedStyles } = yamlEngine.parse(content);
                     if (loadedWidgets && loadedWidgets.length > 0) {
                         loadState(loadedWidgets);
                         if (loadedAssets && loadedAssets.length > 0) {
@@ -117,6 +132,9 @@ function App() {
                         }
                         if (loadedSubs) {
                             useStore.getState().setSubstitutions(loadedSubs);
+                        }
+                        if (loadedStyles) {
+                            useStore.getState().setGlobalStyles(loadedStyles);
                         }
                         setRawYaml(content);
                     } else {
@@ -167,25 +185,12 @@ function App() {
                         <h1>ESPHome LVGL Editor</h1>
                     </div>
 
-                    <div className="toolbar-actions" style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '16px', marginLeft: '20px' }}>
-                        <CanvasSettings />
-                        <StyleEditorModal />
-                        <ThemeToggle />
-                        <button
-                            className="btn-icon"
-                            style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px' }}
-                            onClick={() => setAssetManagerOpen(true)}
-                            title="Assets"
-                        >
-                            <span className="mdi mdi-folder-multiple-image" />
-                        </button>
-
-                        <div className="setting-divider" style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
-
-                        <div className="button-group" style={{ display: 'flex', gap: '8px' }}>
+                    <div className="toolbar-actions" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                        {/* Group 1: Project */}
+                        <div className="toolbar-group">
+                            <span className="toolbar-group-label">Project</span>
                             <button
                                 className="btn-icon"
-                                style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px' }}
                                 onClick={() => {
                                     if (window.confirm('Start from scratch? All current changes will be lost.')) {
                                         resetState();
@@ -193,11 +198,11 @@ function App() {
                                 }}
                                 title="New Project"
                             >
-                                <span className="mdi mdi-file-outline" />
+                                <span className="mdi mdi-file-plus-outline" />
                             </button>
 
-                            <label className="btn-icon" style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px', cursor: 'pointer', margin: 0 }} title="Load YAML">
-                                <span className="mdi mdi-upload" />
+                            <label className="btn-icon" style={{ cursor: 'pointer', margin: 0 }} title="Load YAML">
+                                <span className="mdi mdi-folder-open-outline" />
                                 <input
                                     type="file"
                                     accept=".yaml,.yml"
@@ -206,32 +211,46 @@ function App() {
                                 />
                             </label>
 
-                            <button className="btn-icon" style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px' }} onClick={handleExport} title="Export YAML">
-                                <span className="mdi mdi-download" />
+                            <button className="btn-icon" onClick={handleExport} title="Export YAML">
+                                <span className="mdi mdi-content-save-outline" />
                             </button>
 
                             <button
-                                className="btn-icon"
-                                style={{
-                                    border: '1px solid var(--primary)',
-                                    padding: '6px',
-                                    borderRadius: '4px',
-                                    background: 'var(--primary)',
-                                    color: 'white'
-                                }}
+                                className="btn-icon primary"
                                 onClick={() => setEmulatorOpen(true)}
                                 title="Run Emulator"
+                                style={{ marginLeft: '4px' }}
                             >
                                 <span className="mdi mdi-play" />
                             </button>
                         </div>
 
-                        <div className="setting-divider" style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
+                        {/* Group 2: View */}
+                        <div className="toolbar-group">
+                            <span className="toolbar-group-label">View</span>
+                            <ThemeToggle />
+                            <CanvasSettings />
+                        </div>
 
-                        <div className="button-group" style={{ display: 'flex', gap: '8px' }}>
+                        <div className="toolbar-group">
+                            <span className="toolbar-group-label">Resources</span>
+                            <button className="btn-icon" onClick={() => openStyleEditor()} title="Global Styles Editor">
+                                <span className="mdi mdi-palette-swatch-outline" />
+                            </button>
                             <button
                                 className="btn-icon"
-                                style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px' }}
+                                onClick={() => setAssetManagerOpen(true)}
+                                title="Asset Manager"
+                            >
+                                <span className="mdi mdi-folder-multiple-image" />
+                            </button>
+                        </div>
+
+                        {/* Group 4: History */}
+                        <div className="toolbar-group">
+                            <span className="toolbar-group-label">History</span>
+                            <button
+                                className="btn-icon"
                                 onClick={undo}
                                 disabled={!canUndo}
                                 title="Undo (Ctrl+Z)"
@@ -240,7 +259,6 @@ function App() {
                             </button>
                             <button
                                 className="btn-icon"
-                                style={{ border: '1px solid var(--border-muted)', padding: '6px', borderRadius: '4px' }}
                                 onClick={redo}
                                 disabled={!canRedo}
                                 title="Redo (Ctrl+Y)"
@@ -292,6 +310,7 @@ function App() {
 
                 <EmulatorModal />
                 <AssetManager />
+                <StyleEditorModal />
             </div>
         </DndProvider>
     );

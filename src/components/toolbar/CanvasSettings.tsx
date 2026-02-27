@@ -45,9 +45,8 @@ export const CanvasSettings: React.FC = () => {
 
     return (
         <>
-            <button className="btn" onClick={() => setIsModalOpen(true)} title="Canvas Settings">
-                <i className="mdi mdi-cog" style={{ marginRight: '4px' }}></i>
-                Settings
+            <button className="btn-icon" onClick={() => setIsModalOpen(true)} title="Canvas Settings">
+                <span className="mdi mdi-cog" />
             </button>
 
             {isModalOpen && createPortal(
@@ -128,29 +127,25 @@ export const CanvasSettings: React.FC = () => {
                 </div>
                 , document.body)}
 
-            <div className="setting-divider" />
-
-            <div className="setting-group">
-                <div className="mode-toggle">
-                    <button
-                        className={`btn-mode ${canvasConfig.viewMode === '1:1' ? 'active' : ''}`}
-                        onClick={() => setViewMode('1:1')}
-                        title="1:1 Resolution"
-                    >
-                        1:1
-                    </button>
-                    <button
-                        className={`btn-mode ${canvasConfig.viewMode === 'fit' ? 'active' : ''}`}
-                        onClick={() => setViewMode('fit')}
-                        title="Fit to Area"
-                    >
-                        Fit
-                    </button>
-                </div>
+            <div className="mode-toggle" style={{ marginLeft: '4px' }}>
+                <button
+                    className={`btn-mode ${canvasConfig.viewMode === '1:1' ? 'active' : ''}`}
+                    onClick={() => setViewMode('1:1')}
+                    title="1:1 Resolution"
+                >
+                    1:1
+                </button>
+                <button
+                    className={`btn-mode ${canvasConfig.viewMode === 'fit' ? 'active' : ''}`}
+                    onClick={() => setViewMode('fit')}
+                    title="Fit to Area"
+                >
+                    Fit
+                </button>
             </div>
 
-            <div className="setting-group zoom-group" style={{ gap: '8px' }}>
-                <label className="mdi mdi-magnify" />
+            <div className="zoom-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
+                <span className="mdi mdi-magnify" style={{ color: 'hsl(var(--text-dim))' }} />
                 <input
                     type="range"
                     min="0.5"
@@ -161,40 +156,34 @@ export const CanvasSettings: React.FC = () => {
                     className="input-range"
                     disabled={canvasConfig.viewMode === 'fit'}
                 />
-                <span className="zoom-value">{Math.round(canvasConfig.zoom * 100)}%</span>
+                <span className="zoom-value" style={{ fontSize: '0.7rem', width: '30px' }}>{Math.round(canvasConfig.zoom * 100)}%</span>
             </div>
 
-            <div className="setting-divider" />
-
-            <div className="setting-group grid-controls">
-                <button
-                    className={`btn-icon ${gridConfig.visible ? 'active' : ''}`}
-                    onClick={() => setGridConfig({ visible: !gridConfig.visible })}
-                    title="Toggle Grid Visibility"
-                    style={{ color: gridConfig.visible ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))' }}
-                >
-                    <span className="mdi mdi-grid" />
-                </button>
-                <button
-                    className={`btn-icon ${gridConfig.enabled ? 'active' : ''}`}
-                    onClick={() => setGridConfig({ enabled: !gridConfig.enabled })}
-                    title="Toggle Snap to Grid"
-                    style={{ color: gridConfig.enabled ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))' }}
-                >
-                    <span className="mdi mdi-magnet" />
-                </button>
-                <div className="setting-item">
-                    <input
-                        type="number"
-                        value={gridConfig.size}
-                        min="2"
-                        max="50"
-                        onChange={(e) => setGridConfig({ size: parseInt(e.target.value) || 5 })}
-                        className="input-number-tiny"
-                        title="Grid Size"
-                    />
-                </div>
-            </div>
+            <button
+                className={`btn-icon ${gridConfig.visible ? 'active' : ''}`}
+                onClick={() => setGridConfig({ visible: !gridConfig.visible })}
+                title="Toggle Grid Visibility"
+                style={{ marginLeft: '4px' }}
+            >
+                <span className="mdi mdi-grid" />
+            </button>
+            <button
+                className={`btn-icon ${gridConfig.enabled ? 'active' : ''}`}
+                onClick={() => setGridConfig({ enabled: !gridConfig.enabled })}
+                title="Toggle Snap to Grid"
+            >
+                <span className="mdi mdi-magnet" />
+            </button>
+            <input
+                type="number"
+                value={gridConfig.size}
+                min="2"
+                max="50"
+                onChange={(e) => setGridConfig({ size: parseInt(e.target.value) || 5 })}
+                className="input-number-tiny"
+                title="Grid Size"
+                style={{ marginLeft: '2px' }}
+            />
         </>
     );
 };

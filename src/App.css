@@ -81,13 +81,35 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 16px;
   background: hsl(var(--bg-base));
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-bottom: 1px solid var(--border-subtle);
   z-index: 100;
   flex-shrink: 0;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.toolbar-group:last-child {
+  border-right: none;
+}
+
+.toolbar-group-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--text-dim));
+  margin-right: 4px;
+  user-select: none;
 }
 
 .editor-main {
@@ -98,22 +120,23 @@ body {
 }
 
 .toolbar h1 {
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: hsl(var(--text-main));
   margin: 0;
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
 }
 
 .toolbar h1::before {
   content: '';
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
 /* Sidebar Styling */
@@ -706,8 +729,8 @@ body {
   background: transparent;
   border: none;
   color: hsl(var(--text-muted));
-  padding: 2px 8px;
-  font-size: 0.75rem;
+  padding: 4px 12px;
+  font-size: 0.85rem;
   font-weight: 600;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -764,25 +787,47 @@ body {
 .btn-icon {
   background: transparent;
   border: 1px solid transparent;
-  color: white;
-  opacity: 0.6;
-  padding: 4px;
-  border-radius: var(--radius-sm);
+  color: hsl(var(--text-main));
+  padding: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: var(--transition-fast);
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.btn-icon .mdi {
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.1);
-  opacity: 1;
+  background: hsla(0, 0%, 100%, 0.05);
+  border-color: var(--border-muted);
+}
+
+.btn-icon:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .btn-icon.active {
   color: hsl(var(--primary));
-  opacity: 1;
+  background: var(--primary-glow);
+  border-color: hsla(var(--primary), 0.3);
+}
+
+.btn-icon.primary {
+  background: hsl(var(--primary));
+  color: white;
+  border-color: hsl(var(--primary));
+}
+
+.btn-icon.primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .input-number-tiny {

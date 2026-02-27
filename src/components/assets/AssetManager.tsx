@@ -46,8 +46,17 @@ const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void }>
                 {asset.type === 'icon' ? (
                     (asset.value.length === 1 || asset.value.length === 2) && !asset.value.startsWith('mdi:') ? (
                         <span
-                            className="mdi-glyph mdi"
-                            style={{ fontSize: '1.2rem', color: 'hsl(var(--primary))' }}
+                            style={{
+                                fontSize: '1.2rem',
+                                color: 'hsl(var(--primary))',
+                                display: 'inline-block',
+                                lineHeight: 1,
+                                fontFamily: [
+                                    '"Material Design Icons"',
+                                    ...useStore.getState().assets.filter(a => a.type === 'font' && a.family).map(a => `"${a.family}"`),
+                                    'sans-serif'
+                                ].join(', ')
+                            }}
                             title={`Glyph: \\U${asset.value.codePointAt(0)?.toString(16).padStart(8, '0').toUpperCase()}`}
                         >
                             {asset.value}

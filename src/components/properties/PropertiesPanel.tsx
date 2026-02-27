@@ -162,9 +162,22 @@ const ActionStepEditor: React.FC<{
 };
 
 export const PropertiesPanel: React.FC = () => {
-    const { widgets, selectedIds, updateWidget } = useStore();
+    const { widgets, selectedIds, updateWidget, global_styles, assets } = useStore();
     const [activeState, setActiveState] = React.useState<string>('DEFAULT');
     const [newActionInput, setNewActionInput] = React.useState('');
+    const [showIconPopover, setShowIconPopover] = React.useState(false);
+
+    // Close popover when clicking outside
+    React.useEffect(() => {
+        if (!showIconPopover) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (!(e.target as HTMLElement).closest('.icon-helper')) {
+                setShowIconPopover(false);
+            }
+        };
+        window.addEventListener('mousedown', handleClickOutside);
+        return () => window.removeEventListener('mousedown', handleClickOutside);
+    }, [showIconPopover]);
 
     const findSelectedWidget = (): WidgetNode | null => {
         let result: WidgetNode | null = null;
@@ -234,7 +247,21 @@ export const PropertiesPanel: React.FC = () => {
 
     const getStyleValue = (key: keyof StyleProperties) => {
         if (activeState === 'DEFAULT') {
-            return selectedNode.styles?.[key];
+            const val = selectedNode.styles?.[key];
+            if (val !== undefined) return val;
+
+            // If local style is missing, try to resolve from global styles (inheritance preview)
+            if (selectedNode.style_references) {
+                for (const ref of selectedNode.style_references) {
+                    if ((!ref.state || ref.state === 'DEFAULT') && ref.style_id) {
+                        const globalStyle = global_styles[ref.style_id];
+                        if (globalStyle && globalStyle[key] !== undefined) {
+                            return globalStyle[key];
+                        }
+                    }
+                }
+            }
+            return undefined;
         }
         const ref = selectedNode.style_references?.find(r => r.state === activeState);
         return ref?.styles?.[key];
@@ -523,7 +550,102 @@ export const PropertiesPanel: React.FC = () => {
             </div>
             {(selectedNode.type === 'label' || selectedNode.type === 'button' || selectedNode.type === 'checkbox' || selectedNode.type === 'textarea') && (
                 <div className="property-group">
-                    <h3>Content</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0 }}>Content</h3>
+                        {assets.some(a => a.type === 'icon') && (
+                            <div className="icon-helper" style={{ position: 'relative' }}>
+                                <button
+                                    className="btn-icon-small"
+                                    onClick={() => setShowIconPopover(!showIconPopover)}
+                                    title="Insert Icon Asset"
+                                    style={{
+                                        padding: '2px 6px',
+                                        fontSize: '0.9rem',
+                                        background: showIconPopover ? 'var(--primary)' : 'hsl(var(--bg-surface-elevated))',
+                                        border: '1px solid var(--border-subtle)',
+                                        borderRadius: '4px',
+                                        color: showIconPopover ? 'white' : 'hsl(var(--primary))',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <span className="mdi mdi-emoticon-outline" />
+                                </button>
+                                {showIconPopover && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + 4px)',
+                                        right: 0,
+                                        zIndex: 1000,
+                                        background: 'hsl(var(--bg-surface-elevated))',
+                                        border: '1px solid var(--border-subtle)',
+                                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4)',
+                                        padding: '8px',
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(4, 1fr)',
+                                        gap: '4px',
+                                        borderRadius: '8px',
+                                        width: '180px',
+                                        maxHeight: '240px',
+                                        overflowY: 'auto',
+                                        animation: 'popIn 0.2s ease-out'
+                                    }}>
+                                        {assets.filter(a => a.type === 'icon').length === 0 ? (
+                                            <div style={{ gridColumn: 'span 4', padding: '20px', textAlign: 'center', color: 'hsl(var(--text-muted))', fontSize: '0.8rem' }}>
+                                                No icons found
+                                            </div>
+                                        ) : (
+                                            assets.filter(a => a.type === 'icon').map(asset => {
+                                                const isGlyph = (asset.value.length === 1 || asset.value.length === 2) && !asset.value.startsWith('mdi:');
+                                                return (
+                                                    <button
+                                                        key={asset.id}
+                                                        onClick={() => {
+                                                            handlePropChange('text', isGlyph ? asset.value : `mdi:${asset.value.replace('mdi:', '')}`);
+                                                            setShowIconPopover(false);
+                                                        }}
+                                                        style={{
+                                                            padding: '8px',
+                                                            background: 'transparent',
+                                                            border: '1px solid transparent',
+                                                            borderRadius: '4px',
+                                                            color: 'hsl(var(--text-main))',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: isGlyph ? '1.1rem' : '1.4rem',
+                                                            transition: 'all 0.15s',
+                                                            minWidth: '36px',
+                                                            minHeight: '36px'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = 'hsl(var(--bg-surface-soft))'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                        title={`${asset.name} (${asset.value})`}
+                                                    >
+                                                        {isGlyph ? (
+                                                            <span style={{
+                                                                fontFamily: [
+                                                                    '"Material Design Icons"',
+                                                                    ...assets.filter(a => a.type === 'font' && a.family).map(a => `"${a.family}"`),
+                                                                    'sans-serif'
+                                                                ].join(', '),
+                                                                lineHeight: 1
+                                                            }}>
+                                                                {asset.value}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`mdi mdi-${asset.value.replace('mdi:', '')}`} />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     <div className="prop-row">
                         <label>Text</label>
                         {selectedNode.type === 'textarea' ? (
@@ -735,7 +857,7 @@ export const PropertiesPanel: React.FC = () => {
                                     style={{ padding: '4px', fontSize: '0.75rem', background: 'hsl(var(--bg-surface))', color: 'hsl(var(--text-main))', border: '1px solid var(--border-subtle)', borderRadius: '4px' }}
                                 >
                                     <option value="">Style ID</option>
-                                    {Object.keys(useStore.getState().global_styles).map(sId => (
+                                    {Object.keys(global_styles).map(sId => (
                                         <option key={sId} value={sId}>{sId}</option>
                                     ))}
                                 </select>
@@ -803,7 +925,7 @@ export const PropertiesPanel: React.FC = () => {
                         onChange={(e) => handleStyleChange('text_font', e.target.value)}
                     >
                         <option value="">Default</option>
-                        {useStore.getState().assets
+                        {assets
                             .filter(a => a.type === 'font')
                             .map(font => (
                                 <option key={font.id} value={font.value}>
@@ -1052,6 +1174,10 @@ export const PropertiesPanel: React.FC = () => {
                     flex-direction: column;
                     gap: 8px;
                     margin-top: 8px;
+                }
+                @keyframes popIn {
+                    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
                 }
             `}</style>
         </div>

@@ -165,6 +165,7 @@ export interface EditorState {
     removeAsset: (id: string) => void;
     loadAssets: (assets: Asset[]) => void;
     setSubstitutions: (subs: Record<string, string>) => void;
+    setGlobalStyles: (styles: Record<string, StyleProperties>) => void;
 
     // Global Styles
     updateGlobalStyle: (className: string, styles: StyleProperties) => void;

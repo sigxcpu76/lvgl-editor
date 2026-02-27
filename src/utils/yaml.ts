@@ -19,10 +19,10 @@ export class YamlEngine {
      * Parses the full ESPHome YAML string.
      * Extracts the 'lvgl' section from 'display' or top-level.
      */
-    parse(yamlString: string): { widgets: WidgetNode[], assets: any[], substitutions: Record<string, string> } {
+    parse(yamlString: string): { widgets: WidgetNode[], assets: any[], substitutions: Record<string, string>, global_styles: Record<string, StyleProperties> } {
         try {
             this.yamlDoc = parseDocument(yamlString);
-            if (!this.yamlDoc || !this.yamlDoc.contents) return { widgets: [], assets: [], substitutions: {} };
+            if (!this.yamlDoc || !this.yamlDoc.contents) return { widgets: [], assets: [], substitutions: {}, global_styles: {} };
 
             this.styles.clear();
             this.substitutions.clear();
@@ -88,7 +88,7 @@ export class YamlEngine {
                 console.warn("No LVGL configuration found in YAML");
                 const subsRecord: Record<string, string> = {};
                 this.substitutions.forEach((v, k) => subsRecord[k] = v);
-                return { widgets: [], assets, substitutions: subsRecord };
+                return { widgets: [], assets, substitutions: subsRecord, global_styles: {} };
             }
 
             // 3. Resolve style definitions
@@ -117,11 +117,14 @@ export class YamlEngine {
             const subsRecord: Record<string, string> = {};
             this.substitutions.forEach((v, k) => subsRecord[k] = v);
 
+            const globalStyles: Record<string, StyleProperties> = {};
+            this.styles.forEach((v, k) => globalStyles[k] = v);
+
             this.assets = assets;
-            return { widgets, assets, substitutions: subsRecord };
+            return { widgets, assets, substitutions: subsRecord, global_styles: globalStyles };
         } catch (e) {
             console.error("YAML Parse Error:", e);
-            return { widgets: [], assets: [], substitutions: {} };
+            return { widgets: [], assets: [], substitutions: {}, global_styles: {} };
         }
     }
 
@@ -398,13 +401,9 @@ export class YamlEngine {
                         style_references.push(ref);
                         if (ref.style_id) class_names_legacy.push(ref.style_id);
 
-                        // Apply default styles to the widget preview immediately
-                        if (ref.style_id && (!ref.state || ref.state === 'DEFAULT')) {
-                            const resolved = this.styles.get(ref.style_id);
-                            if (resolved) {
-                                Object.assign(styles, resolved);
-                            }
-                        }
+                        // DO NOT apply default styles to the widget preview immediately here!
+                        // This prevents "baking" and ensures global style changes in the editor
+                        // are reflected in the preview via the WidgetRenderer.
 
                         // Also apply inline styles if it's default state
                         if (ref.styles && (!ref.state || ref.state === 'DEFAULT')) {
@@ -562,9 +561,9 @@ export class YamlEngine {
             if (Object.keys(global_styles).length > 0) {
                 const styleDefs = Object.entries(global_styles).map(([id, styles]) => {
                     const yamlStyle: any = { id };
-                    if (styles.bg_color) yamlStyle.bg_color = styles.bg_color;
-                    if (styles.text_color) yamlStyle.text_color = styles.text_color;
-                    if (styles.border_color) yamlStyle.border_color = styles.border_color;
+                    if (styles.bg_color) yamlStyle.bg_color = this.formatColor(styles.bg_color);
+                    if (styles.text_color) yamlStyle.text_color = this.formatColor(styles.text_color);
+                    if (styles.border_color) yamlStyle.border_color = this.formatColor(styles.border_color);
                     if (styles.radius !== undefined) yamlStyle.radius = styles.radius;
                     if (styles.border_width !== undefined) yamlStyle.border_width = styles.border_width;
                     if (styles.pad_all !== undefined) yamlStyle.pad_all = styles.pad_all;
@@ -575,9 +574,9 @@ export class YamlEngine {
                     if (styles.bg_opa !== undefined) yamlStyle.bg_opa = Math.round(styles.bg_opa * 255);
                     if (styles.text_font) yamlStyle.text_font = styles.text_font;
                     if (styles.text_align) yamlStyle.text_align = styles.text_align;
-                    if (styles.arc_color) yamlStyle.arc_color = styles.arc_color;
+                    if (styles.arc_color) yamlStyle.arc_color = this.formatColor(styles.arc_color);
                     if (styles.arc_width !== undefined) yamlStyle.arc_width = styles.arc_width;
-                    if (styles.line_color) yamlStyle.line_color = styles.line_color;
+                    if (styles.line_color) yamlStyle.line_color = this.formatColor(styles.line_color);
                     if (styles.line_width !== undefined) yamlStyle.line_width = styles.line_width;
                     return yamlStyle;
                 });
@@ -704,27 +703,27 @@ export class YamlEngine {
 
         if (w.styles) {
             const s = w.styles;
-            if (s.bg_color) props.bg_color = s.bg_color;
+            if (s.bg_color) props.bg_color = this.formatColor(s.bg_color);
             if (s.bg_opa !== undefined) props.bg_opa = Math.round(s.bg_opa * 255);
-            if (s.text_color) props.text_color = s.text_color;
+            if (s.text_color) props.text_color = this.formatColor(s.text_color);
             if (s.text_font) props.text_font = s.text_font;
             if (s.text_align) props.text_align = s.text_align;
             if (s.radius !== undefined) props.radius = s.radius;
             if (s.border_width !== undefined) props.border_width = s.border_width;
-            if (s.border_color) props.border_color = s.border_color;
+            if (s.border_color) props.border_color = this.formatColor(s.border_color);
             if (s.pad_all !== undefined) props.pad_all = s.pad_all;
             if (s.pad_top !== undefined) props.pad_top = s.pad_top;
             if (s.pad_bottom !== undefined) props.pad_bottom = s.pad_bottom;
             if (s.pad_left !== undefined) props.pad_left = s.pad_left;
             if (s.pad_right !== undefined) props.pad_right = s.pad_right;
             if (s.shadow_width !== undefined) props.shadow_width = s.shadow_width;
-            if (s.shadow_color) props.shadow_color = s.shadow_color;
+            if (s.shadow_color) props.shadow_color = this.formatColor(s.shadow_color);
             if (s.shadow_ofs_x !== undefined) props.shadow_ofs_x = s.shadow_ofs_x;
             if (s.shadow_ofs_y !== undefined) props.shadow_ofs_y = s.shadow_ofs_y;
             if (s.line_width !== undefined) props.line_width = s.line_width;
-            if (s.line_color) props.line_color = s.line_color;
+            if (s.line_color) props.line_color = this.formatColor(s.line_color);
             if (s.arc_width !== undefined) props.arc_width = s.arc_width;
-            if (s.arc_color) props.arc_color = s.arc_color;
+            if (s.arc_color) props.arc_color = this.formatColor(s.arc_color);
         }
 
         if (w.actions) {

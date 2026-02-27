@@ -299,14 +299,22 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         }
     };
 
-    // Map LVGL styles to CSS React styles
+    // Correctly merge styles: global styles -> inline style_refs -> local overrides
     const s: StyleProperties = {
-        ...(node.class_names?.reduce((acc, className) => {
-            if (global_styles[className]) {
-                return { ...acc, ...global_styles[className] };
+        ...((node.style_references || node.class_names?.map(c => ({ style_id: c })))?.reduce((acc: any, ref: any) => {
+            let combined = { ...acc };
+            // 1. Merge global style if it exists
+            if (ref.style_id && (!ref.state || ref.state === 'DEFAULT')) {
+                const globalStyle = global_styles[ref.style_id];
+                if (globalStyle) combined = { ...combined, ...globalStyle };
             }
-            return acc;
+            // 2. Merge inline styles from the reference
+            if (ref.styles && (!ref.state || ref.state === 'DEFAULT')) {
+                combined = { ...combined, ...ref.styles };
+            }
+            return combined;
         }, {} as StyleProperties) || {}),
+        // 3. Apply local styles (overrides everything)
         ...(node.styles || {})
     };
     const getStyles = (): React.CSSProperties => {
@@ -385,12 +393,12 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             width: isRoot ? '100%' : processDim(node.width),
             height: isRoot ? '100%' : processDim(node.height),
             backgroundColor: bgColor,
-            color: s.text_color || '#ffffff',
+            color: resolveValue(s.text_color || '#ffffff'),
             textAlign: s.text_align ? (s.text_align.toLowerCase() as any) : 'left',
             // Default border for objects in editor to make them visible
             borderWidth: s.border_width ? `${s.border_width}px` : (node.type === 'object' ? '1px' : 0),
             borderStyle: s.border_width ? 'solid' : (node.type === 'object' ? 'dashed' : 'none'),
-            borderColor: s.border_color || (node.type === 'object' ? 'hsl(var(--primary) / 0.3)' : 'transparent'),
+            borderColor: resolveValue(s.border_color || (node.type === 'object' ? 'hsl(var(--primary) / 0.3)' : 'transparent')),
             borderRadius: s.radius ? `${s.radius}px` : 0,
             paddingTop: s.pad_top ?? s.pad_all ?? 0,
             paddingBottom: s.pad_bottom ?? s.pad_all ?? 0,
@@ -413,7 +421,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             zIndex: isRoot ? 1 : (isSelected ? 100 : 10),
             opacity: isDragging ? 0.5 : (node.hidden ? 0.4 : 1),
             overflow: 'visible',
-            fontFamily: typeof s.text_font === 'string' ? `"${s.text_font}", sans-serif` : 'inherit',
+            fontFamily: typeof s.text_font === 'string' ? `"${resolveValue(s.text_font)}", sans-serif` : 'inherit',
         };
 
         // Grid child positioning
@@ -468,11 +476,14 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
     const renderContent = (s: StyleProperties) => {
         const text = resolveValue(node.text || '');
 
+        // Resolve font name (could be a substitution like ${myfont})
+        const resolvedFontName = resolveValue(s.text_font);
+
         // Find font asset to get its size and weight
-        const fontAsset = assets.find(a => a.type === 'font' && a.value === s.text_font);
+        const fontAsset = assets.find(a => a.type === 'font' && a.value === resolvedFontName);
         const fontSize = fontAsset?.size ? `${fontAsset.size}px` : undefined;
-        const fontWeight = (s.text_font?.toLowerCase().includes('bold') || (fontAsset?.name?.toLowerCase().includes('bold'))) ? 'bold' : 'normal';
-        const fontFamily = fontAsset?.family ? `"${fontAsset.family}", sans-serif` : (typeof s.text_font === 'string' ? `"${s.text_font}", sans-serif` : 'inherit');
+        const fontWeight = (resolvedFontName?.toLowerCase().includes('bold') || (fontAsset?.name?.toLowerCase().includes('bold'))) ? 'bold' : 'normal';
+        const fontFamily = fontAsset?.family ? `"${fontAsset.family}", sans-serif` : (typeof resolvedFontName === 'string' ? `"${resolvedFontName}", sans-serif` : 'inherit');
 
         // Simple check for MDI icon pattern or common ESPHome icon escapes
         // If it starts with mdi: or is a single character (or surrogate pair) in the icon range
@@ -537,7 +548,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                         <path
                             d={describeArc(cx, cy, r, start, end)}
                             fill="none"
-                            stroke={s.bg_color || '#444'}
+                            stroke={resolveValue(s.bg_color || '#444')}
                             strokeWidth={s.arc_width || 4}
                             strokeLinecap="round"
                         />
@@ -545,7 +556,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                         <path
                             d={describeArc(cx, cy, r, start, valAngle)}
                             fill="none"
-                            stroke={s.arc_color || '#007acc'}
+                            stroke={resolveValue(s.arc_color || '#007acc')}
                             strokeWidth={s.arc_width || 4}
                             strokeLinecap="round"
                         />
@@ -560,9 +571,9 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                 const percent = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
 
                 return (
-                    <div style={{ background: s.bg_color || '#555', width: '100%', height: '100%', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ background: resolveValue(s.bg_color || '#555'), width: '100%', height: '100%', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
                         <div style={{
-                            background: s.arc_color || '#007acc',
+                            background: resolveValue(s.arc_color || '#007acc'),
                             width: `${percent}%`,
                             height: '100%',
                             transition: 'width 0.2s'
@@ -588,7 +599,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                 const active = node.checked;
                 return (
                     <div style={{
-                        background: active ? (s.arc_color || '#007acc') : (s.bg_color || '#555'),
+                        background: active ? resolveValue(s.arc_color || '#007acc') : resolveValue(s.bg_color || '#555'),
                         width: '40px',
                         height: '24px',
                         borderRadius: '12px',
@@ -615,8 +626,8 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%', width: '100%' }}>
                         <div style={{
-                            width: '20px', height: '20px', borderRadius: '4px', border: `2px solid ${s.arc_color || '#007acc'}`,
-                            background: active ? (s.arc_color || '#007acc') : 'transparent',
+                            width: '20px', height: '20px', borderRadius: '4px', border: `2px solid ${resolveValue(s.arc_color || '#007acc')}`,
+                            background: active ? resolveValue(s.arc_color || '#007acc') : 'transparent',
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
                             {active && <span style={{ color: '#fff', fontSize: '14px' }}>✓</span>}
@@ -628,9 +639,9 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             case 'spinbox': {
                 const val = node.value ?? 0;
                 return (
-                    <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: s.bg_color || '#333', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ padding: '0 8px', background: '#444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>-</div>
-                        <div style={{ flex: 1, textAlign: 'center', color: s.text_color || '#fff' }}>{val}</div>
+                        <div style={{ flex: 1, textAlign: 'center', color: resolveValue(s.text_color || '#fff') }}>{val}</div>
                         <div style={{ padding: '0 8px', background: '#444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>+</div>
                     </div>
                 );
@@ -638,33 +649,33 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             case 'dropdown': {
                 const options = node.options?.split('\n') || ['Option 1'];
                 return (
-                    <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: s.bg_color || '#333', borderRadius: '4px', padding: '0 8px', justifyContent: 'space-between' }}>
-                        <span style={{ color: s.text_color || '#fff' }}>{options[0]}</span>
-                        <span style={{ color: s.text_color || '#fff' }}>▼</span>
+                    <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', padding: '0 8px', justifyContent: 'space-between' }}>
+                        <span style={{ color: resolveValue(s.text_color || '#fff') }}>{options[0]}</span>
+                        <span style={{ color: resolveValue(s.text_color || '#fff') }}>▼</span>
                     </div>
                 );
             }
             case 'roller': {
                 const options = node.options?.split('\n') || ['Opt 1', 'Opt 2', 'Opt 3'];
                 return (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', background: s.bg_color || '#333', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-                        <div style={{ color: s.text_color || '#888', opacity: 0.5, fontSize: '0.8em' }}>{options[0]}</div>
-                        <div style={{ color: s.text_color || '#fff', borderTop: `1px solid ${s.arc_color || '#007acc'}`, borderBottom: `1px solid ${s.arc_color || '#007acc'}`, width: '100%', textAlign: 'center', padding: '4px 0', margin: '4px 0' }}>{options[1] || options[0]}</div>
-                        <div style={{ color: s.text_color || '#888', opacity: 0.5, fontSize: '0.8em' }}>{options[2] || ''}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                        <div style={{ color: resolveValue(s.text_color || '#888'), opacity: 0.5, fontSize: '0.8em' }}>{options[0]}</div>
+                        <div style={{ color: resolveValue(s.text_color || '#fff'), borderTop: `1px solid ${resolveValue(s.arc_color || '#007acc')}`, borderBottom: `1px solid ${resolveValue(s.arc_color || '#007acc')}`, width: '100%', textAlign: 'center', padding: '4px 0', margin: '4px 0' }}>{options[1] || options[0]}</div>
+                        <div style={{ color: resolveValue(s.text_color || '#888'), opacity: 0.5, fontSize: '0.8em' }}>{options[2] || ''}</div>
                     </div>
                 );
             }
             case 'textarea': {
                 const text = resolveValue(node.text || 'Textarea...');
                 return (
-                    <div style={{ width: '100%', height: '100%', background: s.bg_color || '#222', color: s.text_color || '#ccc', padding: '8px', borderRadius: '4px', border: '1px solid #444', overflow: 'hidden', whiteSpace: 'pre-wrap', fontFamily }}>
+                    <div style={{ width: '100%', height: '100%', background: resolveValue(s.bg_color || '#222'), color: resolveValue(s.text_color || '#ccc'), padding: '8px', borderRadius: '4px', border: '1px solid #444', overflow: 'hidden', whiteSpace: 'pre-wrap', fontFamily }}>
                         {text}
                     </div>
                 );
             }
             case 'led': {
                 const active = node.checked;
-                const ledColor = active ? (s.bg_color || '#ff0000') : '#333';
+                const ledColor = active ? resolveValue(s.bg_color || '#ff0000') : '#333';
                 const shadow = active ? `0 0 10px ${ledColor}, inset 0 0 5px rgba(255,255,255,0.5)` : 'inset 0 2px 4px rgba(0,0,0,0.5)';
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
