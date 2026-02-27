@@ -9,7 +9,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { AssetManager } from './components/assets/AssetManager';
 import { CanvasSettings } from './components/toolbar/CanvasSettings';
 import { WidgetTree } from './components/sidebar/WidgetTree';
-import { YamlPreview } from './components/preview/YamlPreview';
+import { YamlEditor } from './components/preview/YamlEditor';
 import { StyleEditorModal } from './components/toolbar/StyleEditorModal';
 import { ThemeToggle } from './components/toolbar/ThemeToggle';
 import { EmulatorModal } from './components/emulator/EmulatorModal';
@@ -177,6 +177,32 @@ function App() {
         }
     };
 
+    const handleApplyYaml = (newYaml: string) => {
+        try {
+            const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs, global_styles: loadedStyles } = yamlEngine.parse(newYaml);
+            if (loadedWidgets && loadedWidgets.length > 0) {
+                loadState(loadedWidgets);
+                useStore.getState().setSelectedIds([]); // Clear selection as IDs have changed
+                if (loadedAssets && loadedAssets.length > 0) {
+                    useStore.getState().loadAssets(loadedAssets);
+                }
+                if (loadedSubs) {
+                    useStore.getState().setSubstitutions(loadedSubs);
+                }
+                if (loadedStyles) {
+                    useStore.getState().setGlobalStyles(loadedStyles);
+                }
+                setRawYaml(newYaml);
+                setShowPreview(false);
+            } else {
+                alert("No LVGL widgets or pages found in the YAML. Please ensure your file contains an 'lvgl:' section with widgets.");
+            }
+        } catch (e) {
+            console.error("Apply error:", e);
+            alert("Failed to parse YAML. Check the console for details.");
+        }
+    };
+
     return (
         <DndProvider backend={HTML5Backend}>
             <div className={`editor-layout theme-${theme}`} style={{ cursor: isResizingTree ? 'ns-resize' : 'default' }}>
@@ -301,10 +327,11 @@ function App() {
                 </main>
 
                 {showPreview && (
-                    <YamlPreview
+                    <YamlEditor
                         yaml={generatedYaml}
                         onClose={() => setShowPreview(false)}
                         onDownload={handleDownload}
+                        onApply={handleApplyYaml}
                     />
                 )}
 
