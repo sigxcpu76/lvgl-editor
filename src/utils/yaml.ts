@@ -479,9 +479,26 @@ export class YamlEngine {
         return s;
     }
 
-    generate(widgets: WidgetNode[], assets: any[], global_styles: Record<string, StyleProperties> = {}): string {
+    generate(widgets: WidgetNode[], assets: any[], global_styles: Record<string, StyleProperties> = {}, substitutions: Record<string, string> = {}): string {
         if (!this.yamlDoc) this.yamlDoc = parseDocument(DEFAULT_ESPHOME_YAML);
         const rootContent = this.yamlDoc.contents as any;
+
+        // 1. Update Substitutions
+        if (Object.keys(substitutions).length > 0) {
+            rootContent.set('substitutions', this.yamlDoc.createNode(substitutions));
+        }
+
+        // 2. Update Fonts
+        const fontAssets = assets.filter(a => a.type === 'font');
+        if (fontAssets.length > 0) {
+            const fontNodes = fontAssets.map(a => ({
+                file: a.source || a.family,
+                id: a.name,
+                size: a.size
+            }));
+            rootContent.set('font', this.yamlDoc.createNode(fontNodes));
+        }
+
         const lvglNode = this.findLvglNode(rootContent, 0);
 
         if (lvglNode) {

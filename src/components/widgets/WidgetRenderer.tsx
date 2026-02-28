@@ -4,6 +4,7 @@ import { useStore } from '../../store';
 import { useDrag, useDrop } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
+import { resolveFontFamily, resolveFontSize } from '../../utils/fontUtils';
 
 interface Props {
     node: WidgetNode;
@@ -25,6 +26,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         });
         return str;
     }, [substitutions]);
+
     const isSelected = selectedIds.includes(node.id);
     const [isResizing, setIsResizing] = useState(false);
 
@@ -119,7 +121,6 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         const startXPos = typeof node.x === 'number' ? node.x : 0;
         const startYPos = typeof node.y === 'number' ? node.y : 0;
 
-        // Gather initial positions for all selected widgets
         const initialPositions = new Map<string, { x: number, y: number }>();
         const gatherPositions = (nodes: WidgetNode[]) => {
             nodes.forEach(n => {
@@ -144,14 +145,12 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             const deltaX = (moveEvent.clientX - startX) / scale;
             const deltaY = (moveEvent.clientY - startY) / scale;
 
-            // Only push history once for the drag action
             if (deltaX !== 0 || deltaY !== 0) {
                 if (!hasMoved) {
                     useStore.getState().pushHistory();
                     hasMoved = true;
                 }
 
-                // Move all selected widgets
                 currentSelectedIds.forEach(id => {
                     const pos = initialPositions.get(id);
                     if (pos) {
@@ -169,9 +168,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
 
             if (!containerRef.current) return;
 
-            // Handle grouping/dropping logic only for single selections or the primary drag node for now
             if (currentSelectedIds.length === 1) {
-                // Temporarily ignore the dragged element to find what's underneath
                 const originalPointerEvents = containerRef.current.style.pointerEvents;
                 containerRef.current.style.pointerEvents = 'none';
 
@@ -180,14 +177,11 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                 const targetId = targetWidget?.getAttribute('data-widget-id');
                 const canvasEl = dropEl?.closest('.lvgl-screen');
 
-                // Restore pointer events
                 containerRef.current.style.pointerEvents = originalPointerEvents;
 
                 if (targetId && targetId !== node.id && targetId !== parentId) {
-                    // Drop into a new container
                     useStore.getState().moveWidget(node.id, targetId, 0);
                 } else if (canvasEl && !targetWidget && parentId !== null) {
-                    // Explicitly dropped on canvas background (no other widget beneath)
                     useStore.getState().moveWidget(node.id, null, 0);
                 }
             }
@@ -200,7 +194,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
     const [{ isDragging }, dragRef, dragPreview] = useDrag({
         type: 'widget',
         item: { type: node.type, id: node.id, x: node.x, y: node.y },
-        canDrag: false, // We use manual dragging for existing widgets now
+        canDrag: false,
         collect: (monitor) => ({
             isDragging: !!monitor.isDragging(),
         }),
@@ -218,7 +212,6 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             const clientOffset = monitor.getClientOffset();
             if (!clientOffset) return;
 
-            // Handle asset drop on existing widget
             if (item.asset) {
                 const asset = item.asset as Asset;
                 if (asset.type === 'icon' && (node.type === 'label' || node.type === 'button')) {
@@ -299,30 +292,24 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         }
     };
 
-    // Correctly merge styles: global styles -> inline style_refs -> local overrides
     const s: StyleProperties = {
         ...((node.style_references || node.class_names?.map(c => ({ style_id: c })))?.reduce((acc: any, ref: any) => {
             let combined = { ...acc };
-            // 1. Merge global style if it exists
             if (ref.style_id && (!ref.state || ref.state === 'DEFAULT')) {
                 const globalStyle = global_styles[ref.style_id];
                 if (globalStyle) combined = { ...combined, ...globalStyle };
             }
-            // 2. Merge inline styles from the reference
             if (ref.styles && (!ref.state || ref.state === 'DEFAULT')) {
                 combined = { ...combined, ...ref.styles };
             }
             return combined;
         }, {} as StyleProperties) || {}),
-        // 3. Apply local styles (overrides everything)
         ...(node.styles || {})
     };
-    const getStyles = (): React.CSSProperties => {
 
-        // Handle background color with opacity
+    const getStyles = (): React.CSSProperties => {
         let bgColor = resolveValue(s.bg_color || 'transparent');
         if (s.bg_opa !== undefined && bgColor !== 'transparent') {
-            // Basic support for hex to rgba conversion
             if (bgColor.startsWith('#')) {
                 const hex = bgColor.slice(1);
                 const r = parseInt(hex.slice(0, 2), 16);
@@ -334,45 +321,32 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             bgColor = 'transparent';
         }
 
-        // Handle dimensions
         const processDim = (dim: number | string | undefined) => {
             const resolved = resolveValue(dim);
             if (resolved === 'content' || resolved === 'size_content') return 'auto';
             if (typeof resolved === 'number') return `${resolved}px`;
             if (typeof resolved === 'string' && resolved.endsWith('fr')) return resolved;
             if (typeof resolved === 'string' && !isNaN(Number(resolved))) return `${resolved}px`;
-            return resolved; // e.g. "100%"
+            return resolved;
         };
 
-        // Handle Layout
         const nodeLayout = node.layout || { type: 'absolute' };
         const isFlex = nodeLayout.type === 'flex';
         const isGrid = nodeLayout.type === 'grid';
 
         const flexAlignMainMap: Record<string, string> = {
-            'start': 'flex-start',
-            'center': 'center',
-            'end': 'flex-end',
-            'space_between': 'space-between',
-            'space_around': 'space-around',
-            'space_evenly': 'space-evenly'
+            'start': 'flex-start', 'center': 'center', 'end': 'flex-end',
+            'space_between': 'space-between', 'space_around': 'space-around', 'space_evenly': 'space-evenly'
         };
 
         const flexAlignCrossMap: Record<string, string> = {
-            'start': 'flex-start',
-            'center': 'center',
-            'end': 'flex-end',
-            'stretch': 'stretch'
+            'start': 'flex-start', 'center': 'center', 'end': 'flex-end', 'stretch': 'stretch'
         };
 
         const flexFlowMap: Record<string, string> = {
-            'row': 'row',
-            'column': 'column',
-            'row_wrap': 'row wrap',
-            'column_wrap': 'column wrap'
+            'row': 'row', 'column': 'column', 'row_wrap': 'row wrap', 'column_wrap': 'column wrap'
         };
 
-        // Box Shadow
         let boxShadow = 'none';
         if (s.shadow_width) {
             const color = s.shadow_color || 'rgba(0,0,0,0.5)';
@@ -382,8 +356,6 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         }
 
         const isLabelOrButton = node.type === 'label' || node.type === 'button';
-        const isContainer = node.type === 'object' || node.type === 'page';
-
         const effectiveDisplay = node.hidden ? 'none' : (isFlex ? 'flex' : (isGrid ? 'grid' : (isLabelOrButton ? 'flex' : 'block')));
 
         const styles: React.CSSProperties = {
@@ -395,7 +367,6 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             backgroundColor: bgColor,
             color: resolveValue(s.text_color || '#ffffff'),
             textAlign: s.text_align ? (s.text_align.toLowerCase() as any) : 'left',
-            // Default border for objects in editor to make them visible
             borderWidth: s.border_width ? `${s.border_width}px` : (node.type === 'object' ? '1px' : 0),
             borderStyle: s.border_width ? 'solid' : (node.type === 'object' ? 'dashed' : 'none'),
             borderColor: resolveValue(s.border_color || (node.type === 'object' ? 'hsl(var(--primary) / 0.3)' : 'transparent')),
@@ -421,53 +392,32 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             zIndex: isRoot ? 1 : (isSelected ? 100 : 10),
             opacity: isDragging ? 0.5 : (node.hidden ? 0.4 : 1),
             overflow: 'visible',
-            fontFamily: typeof s.text_font === 'string' ? `"${resolveValue(s.text_font)}", sans-serif` : 'inherit',
+            fontFamily: `"${resolveFontFamily(s.text_font)}", sans-serif`,
+            fontSize: resolveFontSize(s.text_font) ? `${resolveFontSize(s.text_font)}px` : undefined
         };
 
-        // Grid child positioning
         if (node.grid_cell_column_pos !== undefined) {
-            const col = node.grid_cell_column_pos;
-            const span = node.grid_cell_column_span || 1;
-            styles.gridColumn = `${col + 1} / span ${span}`;
-            styles.position = 'relative';
-            styles.left = 'auto';
-            styles.top = 'auto';
+            styles.gridColumn = `${node.grid_cell_column_pos + 1} / span ${node.grid_cell_column_span || 1}`;
+            styles.position = 'relative'; styles.left = 'auto'; styles.top = 'auto';
         }
         if (node.grid_cell_row_pos !== undefined) {
-            const row = node.grid_cell_row_pos;
-            const span = node.grid_cell_row_span || 1;
-            styles.gridRow = `${row + 1} / span ${span}`;
-            styles.position = 'relative';
-            styles.left = 'auto';
-            styles.top = 'auto';
+            styles.gridRow = `${node.grid_cell_row_pos + 1} / span ${node.grid_cell_row_span || 1}`;
+            styles.position = 'relative'; styles.left = 'auto'; styles.top = 'auto';
         }
-        if (node.grid_cell_x_align) {
-            styles.justifySelf = node.grid_cell_x_align;
-        }
-        if (node.grid_cell_y_align) {
-            styles.alignSelf = node.grid_cell_y_align;
-        }
+        if (node.grid_cell_x_align) styles.justifySelf = node.grid_cell_x_align;
+        if (node.grid_cell_y_align) styles.alignSelf = node.grid_cell_y_align;
 
-        // Fix for stretching in grid/flex - if stretch is requested OR flex_grow is used, width/height must be auto
         if (styles.justifySelf === 'stretch' || styles.alignSelf === 'stretch' || (nodeLayout.flex_grow && nodeLayout.flex_grow > 0)) {
             if (!isRoot) {
                 const isRowParent = parentLayout === 'flex' && (!parentFlexFlow || parentFlexFlow.startsWith('row'));
                 const isColParent = parentLayout === 'flex' && (parentFlexFlow && parentFlexFlow.startsWith('column'));
-
-                if (styles.justifySelf === 'stretch' || (isRowParent && nodeLayout.flex_grow)) {
-                    styles.width = 'auto';
-                }
-                if (styles.alignSelf === 'stretch' || (isColParent && nodeLayout.flex_grow)) {
-                    styles.height = 'auto';
-                }
+                if (styles.justifySelf === 'stretch' || (isRowParent && nodeLayout.flex_grow)) styles.width = 'auto';
+                if (styles.alignSelf === 'stretch' || (isColParent && nodeLayout.flex_grow)) styles.height = 'auto';
             }
         }
 
-        // Align property support
         if (node.align === 'center' && !isFlex) {
-            styles.left = '50%';
-            styles.top = '50%';
-            styles.transform = 'translate(-50%, -50%)';
+            styles.left = '50%'; styles.top = '50%'; styles.transform = 'translate(-50%, -50%)';
         }
 
         return styles;
@@ -475,19 +425,12 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
 
     const renderContent = (s: StyleProperties) => {
         const text = resolveValue(node.text || '');
-
-        // Resolve font name (could be a substitution like ${myfont})
         const resolvedFontName = resolveValue(s.text_font);
-
-        // Find font asset to get its size and weight
         const fontAsset = assets.find(a => a.type === 'font' && a.value === resolvedFontName);
-        const fontSize = fontAsset?.size ? `${fontAsset.size}px` : undefined;
+        const fontSize = fontAsset?.size ? `${fontAsset.size}px` : (resolveFontSize(resolvedFontName) ? `${resolveFontSize(resolvedFontName)}px` : undefined);
+        const fontFamily = fontAsset?.family ? `"${fontAsset.family}", sans-serif` : `"${resolveFontFamily(resolvedFontName)}", sans-serif`;
         const fontWeight = (resolvedFontName?.toLowerCase().includes('bold') || (fontAsset?.name?.toLowerCase().includes('bold'))) ? 'bold' : 'normal';
-        const fontFamily = fontAsset?.family ? `"${fontAsset.family}", sans-serif` : (typeof resolvedFontName === 'string' ? `"${resolvedFontName}", sans-serif` : 'inherit');
 
-        // Simple check for MDI icon pattern or common ESPHome icon escapes
-        // If it starts with mdi: or is a single character (or surrogate pair) in the icon range
-        // Private Use Area starts at 0xE000. High surrogate pairs are also likely icons.
         const isIcon = text.startsWith('mdi:') ||
             (text.length === 1 && text.charCodeAt(0) >= 0xE000) ||
             (text.length === 2 && text.charCodeAt(0) >= 0xD800 && text.charCodeAt(0) <= 0xDBFF);
@@ -497,164 +440,70 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             case 'label':
             case 'button':
                 if (isIcon) {
-                    if (iconName) {
-                        return <i className={`mdi mdi-${iconName}`} style={{ fontSize: fontSize || '1.2em' }}></i>;
-                    } else {
-                        // Raw glyph - FORCE MDI font family
-                        return <span style={{ fontSize: fontSize || '1.2em', fontFamily: '"Material Design Icons", sans-serif' }}>{text}</span>;
-                    }
+                    if (iconName) return <i className={`mdi mdi-${iconName}`} style={{ fontSize: fontSize || '1.2em' }}></i>;
+                    return <span style={{ fontSize: fontSize || '1.2em', fontFamily: '"Material Design Icons", sans-serif' }}>{text}</span>;
                 }
                 return <span style={{ fontFamily, fontSize, fontWeight, textAlign: s.text_align ? (s.text_align.toLowerCase() as any) : 'inherit', width: '100%' }}>{text}</span>;
             case 'arc': {
-                const start = node.start_angle ?? 135;
-                const end = node.end_angle ?? 45;
-                const min = node.range_min ?? 0;
-                const max = node.range_max ?? 100;
-                const val = node.value ?? 0;
-                const rot = node.rotation ?? 0;
-
-                // Simple SVG arc visualization
-                // Map angles to coordinates (0 deg is 3 o'clock, clockwise)
+                const r = 40, cx = 50, cy = 50;
                 const polarToCartesian = (cx: number, cy: number, r: number, angle: number) => {
                     const rad = (angle * Math.PI) / 180.0;
-                    return {
-                        x: cx + (r * Math.cos(rad)),
-                        y: cy + (r * Math.sin(rad))
-                    };
+                    return { x: cx + (r * Math.cos(rad)), y: cy + (r * Math.sin(rad)) };
                 };
-
                 const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
-                    const start = polarToCartesian(x, y, radius, endAngle);
-                    const end = polarToCartesian(x, y, radius, startAngle);
-                    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-                    return [
-                        "M", start.x, start.y,
-                        "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
-                    ].join(" ");
+                    const s = polarToCartesian(x, y, radius, endAngle), e = polarToCartesian(x, y, radius, startAngle);
+                    return ["M", s.x, s.y, "A", radius, radius, 0, (endAngle - startAngle <= 180 ? "0" : "1"), 0, e.x, e.y].join(" ");
                 };
-
-                const r = 40;
-                const cx = 50;
-                const cy = 50;
-
-                // Calculate current value angle
+                const start = node.start_angle ?? 135, end = node.end_angle ?? 45, min = node.range_min ?? 0, max = node.range_max ?? 100, val = node.value ?? 0;
                 const totalRange = (end < start) ? (360 - start + end) : (end - start);
-                const valPercent = (val - min) / (max - min);
-                const valAngle = start + (totalRange * valPercent);
-
+                const valAngle = start + (totalRange * (val - min) / (max - min));
                 return (
-                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: `rotate(${rot}deg)` }}>
-                        {/* Background Arc */}
-                        <path
-                            d={describeArc(cx, cy, r, start, end)}
-                            fill="none"
-                            stroke={resolveValue(s.bg_color || '#444')}
-                            strokeWidth={s.arc_width || 4}
-                            strokeLinecap="round"
-                        />
-                        {/* Indicator Arc */}
-                        <path
-                            d={describeArc(cx, cy, r, start, valAngle)}
-                            fill="none"
-                            stroke={resolveValue(s.arc_color || '#007acc')}
-                            strokeWidth={s.arc_width || 4}
-                            strokeLinecap="round"
-                        />
+                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: `rotate(${node.rotation ?? 0}deg)` }}>
+                        <path d={describeArc(cx, cy, r, start, end)} fill="none" stroke={resolveValue(s.bg_color || '#444')} strokeWidth={s.arc_width || 4} strokeLinecap="round" />
+                        <path d={describeArc(cx, cy, r, start, valAngle)} fill="none" stroke={resolveValue(s.arc_color || '#007acc')} strokeWidth={s.arc_width || 4} strokeLinecap="round" />
                     </svg>
                 );
             }
             case 'bar':
             case 'slider': {
-                const min = node.range_min ?? 0;
-                const max = node.range_max ?? 100;
-                const val = node.value ?? 0;
-                const percent = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
-
+                const percent = Math.min(100, Math.max(0, (((node.value ?? 0) - (node.range_min ?? 0)) / ((node.range_max ?? 100) - (node.range_min ?? 0))) * 100));
                 return (
                     <div style={{ background: resolveValue(s.bg_color || '#555'), width: '100%', height: '100%', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
-                        <div style={{
-                            background: resolveValue(s.arc_color || '#007acc'),
-                            width: `${percent}%`,
-                            height: '100%',
-                            transition: 'width 0.2s'
-                        }} />
-                        {node.type === 'slider' && (
-                            <div style={{
-                                position: 'absolute',
-                                left: `${percent}%`,
-                                top: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                width: '12px',
-                                height: '24px',
-                                background: '#fff',
-                                borderRadius: '4px',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                                zIndex: 2
-                            }} />
-                        )}
+                        <div style={{ background: resolveValue(s.arc_color || '#007acc'), width: `${percent}%`, height: '100%', transition: 'width 0.2s' }} />
+                        {node.type === 'slider' && <div style={{ position: 'absolute', left: `${percent}%`, top: '50%', transform: 'translate(-50%, -50%)', width: '12px', height: '24px', background: '#fff', borderRadius: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', zIndex: 2 }} />}
                     </div>
                 );
             }
-            case 'switch': {
-                const active = node.checked;
+            case 'switch':
                 return (
-                    <div style={{
-                        background: active ? resolveValue(s.arc_color || '#007acc') : resolveValue(s.bg_color || '#555'),
-                        width: '40px',
-                        height: '24px',
-                        borderRadius: '12px',
-                        position: 'relative',
-                        transition: 'background 0.2s'
-                    }}>
-                        <div style={{
-                            background: '#fff',
-                            width: '18px',
-                            height: '18px',
-                            borderRadius: '50%',
-                            position: 'absolute',
-                            top: '3px',
-                            left: active ? '19px' : '3px',
-                            transition: 'left 0.2s',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.4)'
-                        }} />
+                    <div style={{ background: node.checked ? resolveValue(s.arc_color || '#007acc') : resolveValue(s.bg_color || '#555'), width: '40px', height: '24px', borderRadius: '12px', position: 'relative', transition: 'background 0.2s' }}>
+                        <div style={{ background: '#fff', width: '18px', height: '18px', borderRadius: '50%', position: 'absolute', top: '3px', left: node.checked ? '19px' : '3px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
                     </div>
                 );
-            }
-            case 'checkbox': {
-                const active = node.checked;
-                const text = resolveValue(node.text || '');
+            case 'checkbox':
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%', width: '100%' }}>
-                        <div style={{
-                            width: '20px', height: '20px', borderRadius: '4px', border: `2px solid ${resolveValue(s.arc_color || '#007acc')}`,
-                            background: active ? resolveValue(s.arc_color || '#007acc') : 'transparent',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            {active && <span style={{ color: '#fff', fontSize: '14px' }}>✓</span>}
+                        <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: `2px solid ${resolveValue(s.arc_color || '#007acc')}`, background: node.checked ? resolveValue(s.arc_color || '#007acc') : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {node.checked && <span style={{ color: '#fff', fontSize: '14px' }}>✓</span>}
                         </div>
-                        <span style={{ color: s.text_color || '#fff', fontSize: fontSize || '14px', fontFamily }}>{text}</span>
+                        <span style={{ color: s.text_color || '#fff', fontSize: fontSize || '14px', fontFamily }}>{resolveValue(node.text || '')}</span>
                     </div>
                 );
-            }
-            case 'spinbox': {
-                const val = node.value ?? 0;
+            case 'spinbox':
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ padding: '0 8px', background: '#444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>-</div>
-                        <div style={{ flex: 1, textAlign: 'center', color: resolveValue(s.text_color || '#fff') }}>{val}</div>
+                        <div style={{ flex: 1, textAlign: 'center', color: resolveValue(s.text_color || '#fff') }}>{node.value ?? 0}</div>
                         <div style={{ padding: '0 8px', background: '#444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>+</div>
                     </div>
                 );
-            }
-            case 'dropdown': {
-                const options = node.options?.split('\n') || ['Option 1'];
+            case 'dropdown':
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', height: '100%', width: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', padding: '0 8px', justifyContent: 'space-between' }}>
-                        <span style={{ color: resolveValue(s.text_color || '#fff') }}>{options[0]}</span>
+                        <span style={{ color: resolveValue(s.text_color || '#fff') }}>{(node.options?.split('\n') || ['Option 1'])[0]}</span>
                         <span style={{ color: resolveValue(s.text_color || '#fff') }}>▼</span>
                     </div>
                 );
-            }
             case 'roller': {
                 const options = node.options?.split('\n') || ['Opt 1', 'Opt 2', 'Opt 3'];
                 return (
@@ -665,92 +514,33 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     </div>
                 );
             }
-            case 'textarea': {
-                const text = resolveValue(node.text || 'Textarea...');
-                return (
-                    <div style={{ width: '100%', height: '100%', background: resolveValue(s.bg_color || '#222'), color: resolveValue(s.text_color || '#ccc'), padding: '8px', borderRadius: '4px', border: '1px solid #444', overflow: 'hidden', whiteSpace: 'pre-wrap', fontFamily }}>
-                        {text}
-                    </div>
-                );
-            }
-            case 'led': {
-                const active = node.checked;
-                const ledColor = active ? resolveValue(s.bg_color || '#ff0000') : '#333';
-                const shadow = active ? `0 0 10px ${ledColor}, inset 0 0 5px rgba(255,255,255,0.5)` : 'inset 0 2px 4px rgba(0,0,0,0.5)';
+            case 'textarea':
+                return <div style={{ width: '100%', height: '100%', background: resolveValue(s.bg_color || '#222'), color: resolveValue(s.text_color || '#ccc'), padding: '8px', borderRadius: '4px', border: '1px solid #444', overflow: 'hidden', whiteSpace: 'pre-wrap', fontFamily }}>{resolveValue(node.text || 'Textarea...')}</div>;
+            case 'led':
+                const ledColor = node.checked ? resolveValue(s.bg_color || '#ff0000') : '#333';
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
-                        <div style={{
-                            width: 'min(100%, 100%)',
-                            aspectRatio: '1',
-                            borderRadius: '50%',
-                            background: ledColor,
-                            boxShadow: shadow,
-                            transition: 'all 0.2s'
-                        }} />
+                        <div style={{ width: 'min(100%, 100%)', aspectRatio: '1', borderRadius: '50%', background: ledColor, boxShadow: node.checked ? `0 0 10px ${ledColor}, inset 0 0 5px rgba(255,255,255,0.5)` : 'inset 0 2px 4px rgba(0,0,0,0.5)', transition: 'all 0.2s' }} />
                     </div>
                 );
-            }
-            case 'page':
-            case 'object':
-            default:
-                return null;
+            default: return null;
         }
     };
 
-    // Helper to determine if a color is light or dark
     const isColorDark = (color: string) => {
-        if (color === 'transparent') return true;
-        if (color.startsWith('#')) {
-            const hex = color.slice(1);
-            const r = parseInt(hex.slice(0, 2), 16);
-            const g = parseInt(hex.slice(2, 4), 16);
-            const b = parseInt(hex.slice(4, 6), 16);
-            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            return brightness < 128;
-        }
-        return true; // Default to dark background
+        if (color === 'transparent' || !color.startsWith('#')) return true;
+        const hex = color.slice(1);
+        const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+        return ((r * 299 + g * 587 + b * 114) / 1000) < 128;
     };
 
-    const gridColor = isColorDark(node.styles?.bg_color || '#000000')
-        ? 'rgba(255, 255, 255, 0.25)' // Brighter on dark
-        : 'rgba(0, 0, 0, 0.25)';      // Darker on light
+    const gridColor = isColorDark(node.styles?.bg_color || '#000000') ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)';
 
     return (
-        <div
-            ref={setRef}
-            className={`widget-node widget-type-${node.type} ${isSelected ? 'selected' : ''}`}
-            style={getStyles()}
-            onClick={handleClick}
-            onMouseDown={handleDragStart}
-            data-widget-id={node.id}
-        >
-            {isRoot && gridConfig.visible && (
-                <div
-                    className="grid-overlay"
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: 'calc(100% + 1px)',
-                        height: 'calc(100% + 1px)',
-                        pointerEvents: 'none',
-                        zIndex: -1,
-                        backgroundImage: `radial-gradient(circle at 0px 0px, ${gridColor} 1px, transparent 0)`,
-                        backgroundSize: `${gridConfig.size}px ${gridConfig.size}px`,
-                        backgroundPosition: '0 0'
-                    }}
-                />
-            )}
+        <div ref={setRef} className={`widget-node widget-type-${node.type} ${isSelected ? 'selected' : ''}`} style={getStyles()} onClick={handleClick} onMouseDown={handleDragStart} data-widget-id={node.id}>
+            {isRoot && gridConfig.visible && <div className="grid-overlay" style={{ position: 'absolute', top: 0, left: 0, width: 'calc(100% + 1px)', height: 'calc(100% + 1px)', pointerEvents: 'none', zIndex: -1, backgroundImage: `radial-gradient(circle at 0px 0px, ${gridColor} 1px, transparent 0)`, backgroundSize: `${gridConfig.size}px ${gridConfig.size}px`, backgroundPosition: '0 0' }} />}
             {renderContent(s)}
-            {node.children && node.children.map(child => (
-                <WidgetRenderer
-                    key={child.id}
-                    node={child}
-                    parentId={node.id}
-                    parentLayout={node.layout?.type || 'absolute'}
-                    parentFlexFlow={node.layout?.flex_flow}
-                />
-            ))}
+            {node.children && node.children.map(child => <WidgetRenderer key={child.id} node={child} parentId={node.id} parentLayout={node.layout?.type || 'absolute'} parentFlexFlow={node.layout?.flex_flow} />)}
             {isSelected && (
                 <>
                     <div className="resize-handle top-left" onMouseDown={handleResizeStart('nw')} />

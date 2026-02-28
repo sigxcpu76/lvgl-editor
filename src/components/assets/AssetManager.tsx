@@ -13,7 +13,7 @@ const cleanName = (text: string) => {
     }).join('').trim();
 };
 
-const loadGoogleFont = (family: string) => {
+export const loadGoogleFont = (family: string) => {
     if (!family) return;
     const linkId = `gfont-${family.replace(/\s+/g, '-').toLowerCase()}`;
     if (document.getElementById(linkId)) return;
@@ -88,12 +88,6 @@ export const AssetManager: React.FC = () => {
     const [size, setSize] = useState('16');
     const [source, setSource] = useState('');
 
-    React.useEffect(() => {
-        assets.filter(a => a.type === 'font' && a.source?.startsWith('gfonts://')).forEach(a => {
-            const gfamily = a.source?.replace('gfonts://', '');
-            if (gfamily) loadGoogleFont(gfamily);
-        });
-    }, [assets]);
 
     const handleAdd = () => {
         if (!name || (type === 'icon' && !value) || (type === 'font' && !family)) return;

@@ -1,3 +1,8 @@
+html {
+  font-size: 120%;
+  /* ~19px base */
+}
+
 :root {
   /* Shared Tokens */
   --primary: 210 100% 50%;
@@ -103,7 +108,7 @@ body {
 }
 
 .toolbar-group-label {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -120,7 +125,7 @@ body {
 }
 
 .toolbar h1 {
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: hsl(var(--text-main));
@@ -180,7 +185,7 @@ body {
 
 .sidebar-header {
   padding: 16px 20px;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -502,7 +507,7 @@ body {
 }
 
 .prop-row label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: hsl(var(--text-muted));
 }
 

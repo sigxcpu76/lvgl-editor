@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../../store';
 import { StyleProperties } from '../../types';
+import { resolveFontFamily, resolveFontSize } from '../../utils/fontUtils';
 
 export const StyleEditorModal: React.FC = () => {
     const {
@@ -59,8 +60,8 @@ export const StyleEditorModal: React.FC = () => {
     if (!styleEditorOpen) return null;
 
     return createPortal(
-        <div className={`modal-overlay theme-${theme}`} onClick={closeStyleEditor}>
-            <div className="yaml-preview-modal" onClick={e => e.stopPropagation()} style={{ width: '600px', height: '80vh', display: 'flex', flexDirection: 'column', background: 'hsl(var(--bg-surface-elevated))' }}>
+        <div className={`modal-overlay theme-${theme}`} onClick={closeStyleEditor} style={{ color: 'hsl(var(--text-main))' }}>
+            <div className="yaml-preview-modal" onClick={e => e.stopPropagation()} style={{ width: '700px', height: '80vh', display: 'flex', flexDirection: 'column', background: 'hsl(var(--bg-surface-elevated))', color: 'hsl(var(--text-main))' }}>
                 <div className="modal-header">
                     <h2>Global Styles Editor</h2>
                     <button className="btn-close" onClick={closeStyleEditor}>×</button>
@@ -83,7 +84,7 @@ export const StyleEditorModal: React.FC = () => {
                                         color: 'hsl(var(--text-main))',
                                         border: '1px solid var(--border-muted)',
                                         borderRadius: 'var(--radius-md)',
-                                        fontSize: '0.85rem',
+                                        fontSize: '0.9rem',
                                         outline: 'none'
                                     }}
                                 />
@@ -120,26 +121,25 @@ export const StyleEditorModal: React.FC = () => {
                                 classNames.sort().map(name => (
                                     <div
                                         key={name}
-                                        className={`style-list-item ${selectedClass === name ? 'active' : ''}`}
-                                        style={{
-                                            padding: '10px 16px',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            background: selectedClass === name ? 'var(--primary-glow)' : 'transparent',
-                                            color: selectedClass === name ? 'hsl(var(--primary))' : 'hsl(var(--text-main))',
-                                            borderLeft: `3px solid ${selectedClass === name ? 'hsl(var(--primary))' : 'transparent'}`,
-                                            transition: 'var(--transition-fast)',
-                                            margin: '2px 0'
-                                        }}
                                         onClick={() => setSelectedClass(name)}
-                                        onMouseEnter={(e) => { if (selectedClass !== name) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
-                                        onMouseLeave={(e) => { if (selectedClass !== name) e.currentTarget.style.background = 'transparent'; }}
+                                        className="sidebar-item"
+                                        style={{
+                                            padding: '12px 16px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            background: selectedClass === name ? 'hsla(var(--primary), 0.1)' : 'transparent',
+                                            borderLeft: `3px solid ${selectedClass === name ? 'hsl(var(--primary))' : 'transparent'}`,
+                                            fontSize: '0.9rem',
+                                            borderBottom: '1px solid var(--border-subtle)',
+                                            transition: 'all 0.2s ease',
+                                            cursor: 'pointer',
+                                            color: 'hsl(var(--text-main))'
+                                        }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <i className="mdi mdi-pound" style={{ opacity: 0.5, fontSize: '0.8rem' }}></i>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: selectedClass === name ? '600' : '400' }}>{name}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'inherit' }}>
+                                            <i className="mdi mdi-pound" style={{ opacity: 0.5, fontSize: '0.9rem' }}></i>
+                                            <span style={{ fontSize: '0.9rem', fontWeight: selectedClass === name ? '600' : '400', color: 'inherit' }}>{name}</span>
                                         </div>
                                         <button
                                             className="delete-btn-hover"
@@ -204,7 +204,8 @@ export const StyleEditorModal: React.FC = () => {
                                             flexDirection: 'column',
                                             justifyContent: 'center',
                                             transition: 'all 0.2s ease',
-                                            fontFamily: assets.find(a => a.value === activeStyle.text_font)?.family || 'inherit'
+                                            fontFamily: `"${resolveFontFamily(activeStyle.text_font)}", sans-serif`,
+                                            fontSize: resolveFontSize(activeStyle.text_font) ? `${resolveFontSize(activeStyle.text_font)}px` : 'inherit'
                                         }}>
                                             Sample Text
                                         </div>

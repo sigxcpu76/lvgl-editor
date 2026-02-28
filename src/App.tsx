@@ -13,6 +13,7 @@ import { YamlEditor } from './components/preview/YamlEditor';
 import { StyleEditorModal } from './components/toolbar/StyleEditorModal';
 import { ThemeToggle } from './components/toolbar/ThemeToggle';
 import { EmulatorModal } from './components/emulator/EmulatorModal';
+import { FontLoader } from './components/assets/FontLoader';
 import './App.css';
 
 function App() {
@@ -150,8 +151,8 @@ function App() {
     };
 
     const handleExport = () => {
-        const { widgets, assets, global_styles } = useStore.getState();
-        const generatedYaml = yamlEngine.generate(widgets, assets, global_styles);
+        const { widgets, assets, global_styles, substitutions } = useStore.getState();
+        const generatedYaml = yamlEngine.generate(widgets, assets, global_styles, substitutions);
         setGeneratedYaml(generatedYaml);
         setShowPreview(true);
     };
@@ -337,6 +338,7 @@ function App() {
 
                 <EmulatorModal />
                 <AssetManager />
+                <FontLoader />
                 <StyleEditorModal />
             </div>
         </DndProvider>

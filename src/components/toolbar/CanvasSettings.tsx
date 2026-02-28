@@ -61,7 +61,7 @@ export const CanvasSettings: React.FC = () => {
 
                                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '16px' }}>
                                     <div className="setting-group" style={{ width: '100%' }}>
-                                        <label style={{ width: '80px' }}>Resolution</label>
+                                        <label style={{ width: '100px' }}>Resolution</label>
                                         <select
                                             value={canvasConfig.presets.find(p => p.width === canvasConfig.width && p.height === canvasConfig.height)?.name || 'Custom'}
                                             onChange={handlePresetChange}
@@ -76,8 +76,8 @@ export const CanvasSettings: React.FC = () => {
                                     </div>
 
                                     <div className="setting-group-inline" style={{ width: '100%' }}>
-                                        <div className="setting-item" style={{ flex: 1 }}>
-                                            <label style={{ width: '24px' }}>W</label>
+                                        <div className="setting-item" style={{ flex: 1, gap: '12px' }}>
+                                            <label style={{ width: '30px' }}>W</label>
                                             <input
                                                 type="number"
                                                 value={customWidth}
@@ -86,8 +86,8 @@ export const CanvasSettings: React.FC = () => {
                                                 style={{ width: '100%' }}
                                             />
                                         </div>
-                                        <div className="setting-item" style={{ flex: 1 }}>
-                                            <label style={{ width: '24px' }}>H</label>
+                                        <div className="setting-item" style={{ flex: 1, gap: '12px' }}>
+                                            <label style={{ width: '30px' }}>H</label>
                                             <input
                                                 type="number"
                                                 value={customHeight}
