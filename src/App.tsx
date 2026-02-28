@@ -26,6 +26,9 @@ function App() {
     } = useStore();
     const [treeHeight, setTreeHeight] = React.useState(300);
     const [isResizingTree, setIsResizingTree] = React.useState(false);
+    const [leftSidebarWidth, setLeftSidebarWidth] = React.useState(300);
+    const [rightSidebarWidth, setRightSidebarWidth] = React.useState(300);
+    const [resizingSide, setResizingSide] = React.useState<'left' | 'right' | 'bottom' | null>(null);
     const [showPreview, setShowPreview] = React.useState(false);
     const [generatedYaml, setGeneratedYaml] = React.useState('');
 
@@ -91,21 +94,26 @@ function App() {
     }, []);
 
 
-    const startResizing = React.useCallback((e: React.MouseEvent) => {
-        setIsResizingTree(true);
+    const startResizing = React.useCallback((side: 'left' | 'right' | 'bottom') => (e: React.MouseEvent) => {
+        setResizingSide(side);
         e.preventDefault();
     }, []);
 
     const stopResizing = React.useCallback(() => {
-        setIsResizingTree(false);
+        setResizingSide(null);
     }, []);
 
     const resize = React.useCallback((e: MouseEvent) => {
-        if (isResizingTree) {
+        if (resizingSide === 'bottom') {
             const newHeight = window.innerHeight - e.clientY;
             setTreeHeight(Math.max(100, Math.min(newHeight, window.innerHeight - 200)));
+        } else if (resizingSide === 'left') {
+            setLeftSidebarWidth(Math.max(200, Math.min(e.clientX, 600)));
+        } else if (resizingSide === 'right') {
+            const newWidth = window.innerWidth - e.clientX;
+            setRightSidebarWidth(Math.max(200, Math.min(newWidth, 600)));
         }
-    }, [isResizingTree]);
+    }, [resizingSide]);
 
     React.useEffect(() => {
         window.addEventListener('mousemove', resize);
@@ -296,13 +304,14 @@ function App() {
                     </div>
                 </header>
 
-                <main className="editor-main">
-                    <aside className="sidebar left-sidebar">
+                <main className="editor-main" style={{ gridTemplateColumns: `${leftSidebarWidth}px 1fr ${rightSidebarWidth}px` }}>
+                    <aside className="sidebar left-sidebar" style={{ width: leftSidebarWidth }}>
                         <div className="sidebar-section hierarchy-section" style={{ height: '100%' }}>
                             <div className="sidebar-header">Hierarchy</div>
                             <div className="scrollable" style={{ flex: 1 }}>
                                 <WidgetTree />
                             </div>
+                            <div className={`sidebar-resizer-v ${resizingSide === 'left' ? 'active' : ''}`} onMouseDown={startResizing('left')} />
                         </div>
                     </aside>
 
@@ -317,8 +326,9 @@ function App() {
                         </div>
                     </section>
 
-                    <aside className="sidebar right-sidebar">
-                        <div className="sidebar-section properties-section" style={{ flex: 1 }}>
+                    <aside className="sidebar right-sidebar" style={{ width: rightSidebarWidth }}>
+                        <div className="sidebar-section properties-section" style={{ flex: 1, position: 'relative' }}>
+                            <div className={`sidebar-resizer-v ${resizingSide === 'right' ? 'active' : ''}`} onMouseDown={startResizing('right')} />
                             <div className="sidebar-header">Properties</div>
                             <div className="scrollable" style={{ flex: 1 }}>
                                 <PropertiesPanel />

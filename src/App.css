@@ -229,6 +229,32 @@ body {
   flex-direction: column;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.02);
+  position: relative;
+}
+
+.sidebar-resizer-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  cursor: ew-resize;
+  z-index: 100;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.sidebar-resizer-v:hover,
+.sidebar-resizer-v.active {
+  background: hsl(var(--primary));
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.left-sidebar .sidebar-resizer-v {
+  right: 0;
+}
+
+.right-sidebar .sidebar-resizer-v {
+  left: 0;
 }
 
 /* Modal System */
