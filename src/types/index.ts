@@ -1,4 +1,4 @@
-export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led';
+export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image';
 
 export interface StyleProperties {
     bg_color?: string;
@@ -43,6 +43,7 @@ export interface WidgetNode {
     height: number | string;
     text?: string;
     align?: string;
+    src?: string; // For image widgets
 
     // Core states
     hidden?: boolean;
@@ -90,11 +91,14 @@ export interface WidgetNode {
 export interface Asset {
     id: string;
     name: string;
-    type: 'icon' | 'font';
-    value: string; // The font ID (handle) or Icon text
-    family?: string; // The actual font family (e.g. "Roboto")
-    size?: number; // Optional size
-    source?: string; // ESPHome file path (e.g. "gfonts://Roboto" or "fonts/arial.ttf")
+    type: 'icon' | 'font' | 'image';
+    value: string; // The font ID, Icon text, or Image ID
+    family?: string; // For fonts
+    size?: number; // For fonts
+    source?: string; // File path or URL
+    width?: number; // For images
+    height?: number; // For images
+    format?: string; // For images
 }
 
 export interface Resolution {

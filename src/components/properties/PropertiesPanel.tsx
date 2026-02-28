@@ -693,6 +693,38 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
             )}
 
+            {selectedNode.type === 'image' && (
+                <div className="property-group">
+                    <h3>Image</h3>
+                    <div className="prop-row">
+                        <label>Source</label>
+                        <select
+                            value={selectedNode.src || ''}
+                            onChange={(e) => handlePropChange('src', e.target.value)}
+                        >
+                            <option value="">Select Image...</option>
+                            {assets
+                                .filter(a => a.type === 'image')
+                                .map(img => (
+                                    <option key={img.id} value={img.value}>
+                                        {img.name} {img.source && !img.source.startsWith('data:') ? `(${img.source})` : ''}
+                                    </option>
+                                ))
+                            }
+                        </select>
+                    </div>
+                    {selectedNode.src && assets.find(a => a.type === 'image' && a.value === selectedNode.src)?.source?.startsWith('data:') && (
+                        <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', textAlign: 'center' }}>
+                            <img
+                                src={assets.find(a => a.type === 'image' && a.value === selectedNode.src)?.source}
+                                style={{ maxWidth: '100%', maxHeight: '100px', objectFit: 'contain' }}
+                                alt="Preview"
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
             {(selectedNode.type === 'dropdown' || selectedNode.type === 'roller') && (
                 <div className="property-group">
                     <h3>Options</h3>

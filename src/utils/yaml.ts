@@ -80,6 +80,39 @@ export class YamlEngine {
                 }
             }
 
+            // 2b. Extract images
+            const images = this.yamlDoc.get('image') as any;
+            if (images && images.items) {
+                for (const imgItem of images.items) {
+                    const id = String(this.resolveText(imgItem.get('id')));
+                    const file = String(this.resolveText(imgItem.get('file')));
+                    const width = imgItem.get('width');
+                    const height = imgItem.get('height');
+                    const resize = imgItem.get('resize');
+
+                    let w = width ? Number(this.resolveText(width)) : undefined;
+                    let h = height ? Number(this.resolveText(height)) : undefined;
+
+                    if (!w && !h && resize) {
+                        const match = String(this.resolveText(resize)).match(/(\d+)x(\d+)/);
+                        if (match) {
+                            w = parseInt(match[1]);
+                            h = parseInt(match[2]);
+                        }
+                    }
+
+                    assets.push({
+                        id: uuidv4(),
+                        name: id,
+                        type: 'image',
+                        value: id,
+                        source: file,
+                        width: w,
+                        height: h
+                    });
+                }
+            }
+
             const lvglNode = this.findLvglNode(this.yamlDoc.contents, 0);
 
             if (!lvglNode) {
@@ -206,7 +239,7 @@ export class YamlEngine {
     }
 
     private isWidgetType(key: string): boolean {
-        const knownTypes = ['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led'];
+        const knownTypes = ['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led', 'image', 'img'];
         return knownTypes.includes(key);
     }
 
@@ -232,7 +265,7 @@ export class YamlEngine {
             'obj': 'object', 'object': 'object', 'arc': 'arc', 'bar': 'bar',
             'slider': 'slider', 'switch': 'switch', 'checkbox': 'checkbox',
             'spinbox': 'spinbox', 'dropdown': 'dropdown', 'roller': 'roller',
-            'textarea': 'textarea', 'led': 'led'
+            'textarea': 'textarea', 'led': 'led', 'image': 'image', 'img': 'image'
         };
 
         let foundType: WidgetType | null = forceType || null;
@@ -314,6 +347,7 @@ export class YamlEngine {
         let rotation: number | undefined;
         let start_angle: number | undefined;
         let end_angle: number | undefined;
+        let src: string | undefined;
         let style_references_node: StyleReference[] | undefined;
         const children: WidgetNode[] = [];
 
@@ -322,6 +356,7 @@ export class YamlEngine {
         if (hasKey(finalPropsNode, 'y')) y = this.parseDimension(getKey(finalPropsNode, 'y'));
         if (hasKey(finalPropsNode, 'width')) width = this.parseDimension(getKey(finalPropsNode, 'width'));
         if (hasKey(finalPropsNode, 'height')) height = this.parseDimension(getKey(finalPropsNode, 'height'));
+        if (hasKey(finalPropsNode, 'src')) src = this.resolveText(getKey(finalPropsNode, 'src'));
 
         if (hasKey(finalPropsNode, 'text')) {
             text = this.resolveText(getKey(finalPropsNode, 'text'), { resolveSubs: false });
@@ -418,7 +453,7 @@ export class YamlEngine {
             grid_cell_column_pos, grid_cell_column_span, grid_cell_row_pos, grid_cell_row_span,
             grid_cell_x_align, grid_cell_y_align, class_names, options,
             hidden, clickable, checkable, checked, long_mode, min_value, max_value, value, range_min, range_max,
-            rotation, start_angle, end_angle, style_references: style_references_node, actions
+            rotation, start_angle, end_angle, src, style_references: style_references_node, actions
         } as any;
     }
 
@@ -499,6 +534,22 @@ export class YamlEngine {
             rootContent.set('font', this.yamlDoc.createNode(fontNodes));
         }
 
+        // 2b. Update Images
+        const imageAssets = assets.filter(a => a.type === 'image');
+        if (imageAssets.length > 0) {
+            const imageNodes = imageAssets.map(a => {
+                const node: any = {
+                    id: a.name,
+                    file: a.source
+                };
+                if (a.width && a.height) {
+                    node.resize = `${a.width}x${a.height}`;
+                }
+                return node;
+            });
+            rootContent.set('image', this.yamlDoc.createNode(imageNodes));
+        }
+
         const lvglNode = this.findLvglNode(rootContent, 0);
 
         if (lvglNode) {
@@ -565,6 +616,7 @@ export class YamlEngine {
         if (w.height !== undefined) props.height = w.height;
         if (w.text) props.text = this.formatText(w.text);
         if (w.align) props.align = w.align;
+        if (w.src) props.src = w.src;
 
         if (w.hidden !== undefined) props.hidden = w.hidden;
         if (w.clickable !== undefined) props.clickable = w.clickable;

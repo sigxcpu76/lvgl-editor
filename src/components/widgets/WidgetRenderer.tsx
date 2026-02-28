@@ -105,6 +105,15 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
 
     const handleDragStart = useCallback((e: React.MouseEvent) => {
         if (isResizing || isRoot) return;
+
+        const isContainer = ['object', 'page'].includes(node.type) && !node.clickable;
+
+        // If it's a container and NOT selected, let the event bubble to Canvas.tsx for marquee.
+        if (isContainer && !isSelected) {
+            return;
+        }
+
+        // For interactive widgets or selected containers, we stop propagation to start a DRAG move.
         e.stopPropagation();
         e.preventDefault();
 
@@ -223,6 +232,8 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                             text_font: asset.value
                         }
                     });
+                } else if (asset.type === 'image' && node.type === 'image') {
+                    updateWidget(node.id, { src: asset.value });
                 }
                 return;
             }
@@ -249,9 +260,10 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     type: item.type as any,
                     name: `${item.type}_${Date.now().toString().slice(-4)}`,
                     x, y,
-                    width: item.type === 'slider' || item.type === 'bar' ? 150 : 100,
-                    height: item.type === 'slider' || item.type === 'bar' ? 20 : 40,
+                    width: item.type === 'slider' || item.type === 'bar' ? 150 : (item.type === 'image' ? 100 : 100),
+                    height: item.type === 'slider' || item.type === 'bar' ? 20 : (item.type === 'image' ? 100 : 40),
                     text: item.type === 'label' || item.type === 'button' ? `${item.type}` : undefined,
+                    src: item.type === 'image' ? undefined : undefined,
                     range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 0 : undefined,
                     range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 100 : undefined,
                     value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 50 : undefined,
@@ -523,6 +535,21 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                         <div style={{ width: 'min(100%, 100%)', aspectRatio: '1', borderRadius: '50%', background: ledColor, boxShadow: node.checked ? `0 0 10px ${ledColor}, inset 0 0 5px rgba(255,255,255,0.5)` : 'inset 0 2px 4px rgba(0,0,0,0.5)', transition: 'all 0.2s' }} />
                     </div>
                 );
+            case 'image': {
+                const imgAsset = assets.find(a => a.type === 'image' && (a.value === node.src || a.name === node.src));
+                if (imgAsset && imgAsset.source) {
+                    const isRenderable = imgAsset.source.startsWith('http') || imgAsset.source.startsWith('data:');
+                    if (isRenderable) {
+                        return <img src={imgAsset.source} style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} alt={node.name} />;
+                    }
+                }
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <span className="mdi mdi-image-outline" style={{ fontSize: '1.5rem', opacity: 0.3 }} />
+                        <span style={{ fontSize: '0.6rem', opacity: 0.5, marginTop: '4px', textAlign: 'center', padding: '0 4px', wordBreak: 'break-all' }}>{node.src || 'No Image'}</span>
+                    </div>
+                );
+            }
             default: return null;
         }
     };

@@ -49,6 +49,7 @@ export const WidgetPalette: React.FC = () => {
         { type: 'roller', label: 'Roller', icon: 'format-list-bulleted-square' },
         { type: 'textarea', label: 'Textarea', icon: 'form-textarea' },
         { type: 'led', label: 'LED', icon: 'led-on' },
+        { type: 'image', label: 'Image', icon: 'image-outline' },
     ];
 
     return (

@@ -378,6 +378,21 @@ export const EmulatorWidget: React.FC<Props> = ({ node, isRoot, parentId = null,
                     </div>
                 );
             }
+            case 'image': {
+                const imgAsset = assets.find(a => a.type === 'image' && (a.value === node.src || a.name === node.src));
+                if (imgAsset && imgAsset.source) {
+                    const isRenderable = imgAsset.source.startsWith('http') || imgAsset.source.startsWith('data:');
+                    if (isRenderable) {
+                        return <img src={imgAsset.source} style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} alt={node.name} />;
+                    }
+                }
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <span className="mdi mdi-image-outline" style={{ fontSize: '1.5rem', opacity: 0.3 }} />
+                        <span style={{ fontSize: '0.6rem', opacity: 0.5, marginTop: '4px', textAlign: 'center', padding: '0 4px', wordBreak: 'break-all' }}>{node.src || 'No Image'}</span>
+                    </div>
+                );
+            }
             case 'page':
             case 'object':
             default:

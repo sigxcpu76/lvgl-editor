@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useDrop } from 'react-dnd';
 
 export const Canvas: React.FC = () => {
-    const { widgets, setSelectedIds, selectedIds, canvasConfig, gridConfig } = useStore();
+    const { widgets, setSelectedIds, selectedIds, canvasConfig, gridConfig, substitutions } = useStore();
     const [fitScale, setFitScale] = React.useState(1);
     const [selectionBox, setSelectionBox] = React.useState<{
         x1: number;
@@ -66,49 +66,34 @@ export const Canvas: React.FC = () => {
             setSelectionBox(prev => {
                 if (!prev) return null;
 
-                const xMin = Math.min(prev.x1, prev.x2);
-                const xMax = Math.max(prev.x1, prev.x2);
-                const yMin = Math.min(prev.y1, prev.y2);
-                const yMax = Math.max(prev.y1, prev.y2);
-
-                const isPointInBox = (x: number, y: number) => x >= xMin && x <= xMax && y >= yMin && y <= yMax;
-                const isIntersecting = (node: WidgetNode) => {
-                    const nx = typeof node.x === 'number' ? node.x : 0;
-                    const ny = typeof node.y === 'number' ? node.y : 0;
-                    const nw = typeof node.width === 'number' ? node.width : 100;
-                    const nh = typeof node.height === 'number' ? node.height : 40;
-
-                    return !(nx > xMax || nx + nw < xMin || ny > yMax || ny + nh < yMin);
-                };
+                const rect = canvasEl.getBoundingClientRect();
+                const xMin = Math.min(prev.x1, prev.x2) * currentScale + rect.left;
+                const xMax = Math.max(prev.x1, prev.x2) * currentScale + rect.left;
+                const yMin = Math.min(prev.y1, prev.y2) * currentScale + rect.top;
+                const yMax = Math.max(prev.y1, prev.y2) * currentScale + rect.top;
 
                 const newSelectedIds: string[] = [];
-                const search = (nodes: WidgetNode[], offsetX = 0, offsetY = 0) => {
-                    nodes.forEach(node => {
-                        const nx = (typeof node.x === 'number' ? node.x : 0) + offsetX;
-                        const ny = (typeof node.y === 'number' ? node.y : 0) + offsetY;
-                        const nw = (typeof node.width === 'number' ? node.width : (typeof node.width === 'string' && node.width.endsWith('%') ? 100 : 100)); // Rough estimate for non-numbers
-                        const nh = (typeof node.height === 'number' ? node.height : (typeof node.height === 'string' && node.height.endsWith('%') ? 40 : 40));
+                const widgetNodes = canvasEl.querySelectorAll('.widget-node:not(.widget-type-page)');
 
-                        const intersects = !(nx > xMax || nx + nw < xMin || ny > yMax || ny + nh < yMin);
-                        if (intersects) {
-                            newSelectedIds.push(node.id);
-                        }
-                        if (node.children) search(node.children, nx, ny);
-                    });
-                };
-                search(widgets);
+                widgetNodes.forEach(el => {
+                    const elRect = el.getBoundingClientRect();
+                    const intersects = !(elRect.left > xMax || elRect.right < xMin || elRect.top > yMax || elRect.bottom < yMin);
+                    const id = el.getAttribute('data-widget-id');
+                    if (intersects && id) {
+                        newSelectedIds.push(id);
+                    }
+                });
 
                 if (upEvent.shiftKey || upEvent.ctrlKey || upEvent.metaKey) {
                     setSelectedIds([...new Set([...selectedIds, ...newSelectedIds])]);
-                } else if (newSelectedIds.length > 0) {
-                    setSelectedIds(newSelectedIds);
                 } else if (Math.abs(prev.x1 - prev.x2) < 5 && Math.abs(prev.y1 - prev.y2) < 5) {
-                    // It was a click on the background - select the first page if available
                     if (widgets.length > 0 && widgets[0].type === 'page') {
                         setSelectedIds([widgets[0].id]);
                     } else {
                         setSelectedIds([]);
                     }
+                } else {
+                    setSelectedIds(newSelectedIds);
                 }
 
                 return null;
