@@ -50,6 +50,7 @@ export const WidgetPalette: React.FC = () => {
         { type: 'textarea', label: 'Textarea', icon: 'form-textarea' },
         { type: 'led', label: 'LED', icon: 'led-on' },
         { type: 'image', label: 'Image', icon: 'image-outline' },
+        { type: 'meter', label: 'Meter', icon: 'gauge' },
     ];
 
     return (

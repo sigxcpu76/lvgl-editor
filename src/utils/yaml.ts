@@ -1,5 +1,5 @@
 import { Document, parseDocument } from 'yaml';
-import { WidgetNode, WidgetType, StyleProperties, StyleReference } from '../types';
+import { WidgetNode, WidgetType, StyleProperties, StyleReference, MeterScale, MeterTicks, MeterIndicator } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -239,7 +239,7 @@ export class YamlEngine {
     }
 
     private isWidgetType(key: string): boolean {
-        const knownTypes = ['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led', 'image', 'img'];
+        const knownTypes = ['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led', 'image', 'img', 'meter'];
         return knownTypes.includes(key);
     }
 
@@ -265,7 +265,8 @@ export class YamlEngine {
             'obj': 'object', 'object': 'object', 'arc': 'arc', 'bar': 'bar',
             'slider': 'slider', 'switch': 'switch', 'checkbox': 'checkbox',
             'spinbox': 'spinbox', 'dropdown': 'dropdown', 'roller': 'roller',
-            'textarea': 'textarea', 'led': 'led', 'image': 'image', 'img': 'image'
+            'textarea': 'textarea', 'led': 'led', 'image': 'image', 'img': 'image',
+            'meter': 'meter'
         };
 
         let foundType: WidgetType | null = forceType || null;
@@ -349,7 +350,82 @@ export class YamlEngine {
         let end_angle: number | undefined;
         let src: string | undefined;
         let style_references_node: StyleReference[] | undefined;
+        let meter_scales: MeterScale[] | undefined;
         const children: WidgetNode[] = [];
+
+        if (hasKey(finalPropsNode, 'scales') && foundType === 'meter') {
+            const scalesNode = getKey(finalPropsNode, 'scales');
+            if (scalesNode && scalesNode.type === 'SEQ') {
+                meter_scales = scalesNode.items.map((scaleItem: any) => {
+                    const range_from = Number(this.resolveText(getKey(scaleItem, 'range_from')) || 0);
+                    const range_to = Number(this.resolveText(getKey(scaleItem, 'range_to')) || 100);
+                    const angle_range = hasKey(scaleItem, 'angle_range') ? Number(this.resolveText(getKey(scaleItem, 'angle_range'))) : 270;
+                    const rotation = hasKey(scaleItem, 'rotation') ? Number(this.resolveText(getKey(scaleItem, 'rotation'))) : 0;
+
+                    const ticksNode = getKey(scaleItem, 'ticks');
+                    const ticks: MeterTicks = {
+                        count: ticksNode && hasKey(ticksNode, 'count') ? Number(this.resolveText(getKey(ticksNode, 'count'))) : 12,
+                        color: ticksNode && hasKey(ticksNode, 'color') ? this.parseColor(getKey(ticksNode, 'color')) : undefined,
+                        width: ticksNode && hasKey(ticksNode, 'width') ? Number(this.resolveText(getKey(ticksNode, 'width'))) : undefined,
+                        length: ticksNode && hasKey(ticksNode, 'length') ? Number(this.resolveText(getKey(ticksNode, 'length'))) : undefined,
+                    };
+
+                    if (ticksNode && hasKey(ticksNode, 'major')) {
+                        const majorNode = getKey(ticksNode, 'major');
+                        ticks.major = {
+                            stride: hasKey(majorNode, 'stride') ? Number(this.resolveText(getKey(majorNode, 'stride'))) : 3,
+                            width: hasKey(majorNode, 'width') ? Number(this.resolveText(getKey(majorNode, 'width'))) : undefined,
+                            length: hasKey(majorNode, 'length') ? this.resolveText(getKey(majorNode, 'length')) : undefined,
+                            color: hasKey(majorNode, 'color') ? this.parseColor(getKey(majorNode, 'color')) : undefined,
+                            label_gap: hasKey(majorNode, 'label_gap') ? Number(this.resolveText(getKey(majorNode, 'label_gap'))) : undefined,
+                        };
+                    }
+
+                    const indicators: MeterIndicator[] = [];
+                    if (hasKey(scaleItem, 'indicators')) {
+                        const indNode = getKey(scaleItem, 'indicators');
+                        if (indNode && indNode.type === 'SEQ') {
+                            for (const item of indNode.items) {
+                                if (hasKey(item, 'arc')) {
+                                    const arc = getKey(item, 'arc');
+                                    indicators.push({
+                                        type: 'arc',
+                                        color: hasKey(arc, 'color') ? this.parseColor(getKey(arc, 'color')) : undefined,
+                                        start_value: hasKey(arc, 'start_value') ? Number(this.resolveText(getKey(arc, 'start_value'))) : undefined,
+                                        end_value: hasKey(arc, 'end_value') ? Number(this.resolveText(getKey(arc, 'end_value'))) : undefined,
+                                        width: hasKey(arc, 'width') ? Number(this.resolveText(getKey(arc, 'width'))) : undefined,
+                                        r_mod: hasKey(arc, 'r_mod') ? Number(this.resolveText(getKey(arc, 'r_mod'))) : undefined,
+                                        opa: hasKey(arc, 'opa') ? parseFloat(this.resolveText(getKey(arc, 'opa'))) : 100
+                                    });
+                                } else if (hasKey(item, 'line')) {
+                                    const line = getKey(item, 'line');
+                                    indicators.push({
+                                        type: 'line',
+                                        color: hasKey(line, 'color') ? this.parseColor(getKey(line, 'color')) : undefined,
+                                        value: hasKey(line, 'value') ? Number(this.resolveText(getKey(line, 'value'))) : undefined,
+                                        width: hasKey(line, 'width') ? Number(this.resolveText(getKey(line, 'width'))) : undefined,
+                                        r_mod: hasKey(line, 'r_mod') ? Number(this.resolveText(getKey(line, 'r_mod'))) : undefined,
+                                        opa: hasKey(line, 'opa') ? parseFloat(this.resolveText(getKey(line, 'opa'))) : 100
+                                    });
+                                } else if (hasKey(item, 'image')) {
+                                    const img = getKey(item, 'image');
+                                    indicators.push({
+                                        type: 'image',
+                                        src: hasKey(img, 'src') ? this.resolveText(getKey(img, 'src')) : undefined,
+                                        value: hasKey(img, 'value') ? Number(this.resolveText(getKey(img, 'value'))) : undefined,
+                                        pivot_x: hasKey(img, 'pivot_x') ? Number(this.resolveText(getKey(img, 'pivot_x'))) : undefined,
+                                        pivot_y: hasKey(img, 'pivot_y') ? Number(this.resolveText(getKey(img, 'pivot_y'))) : undefined,
+                                        opa: hasKey(img, 'opa') ? parseFloat(this.resolveText(getKey(img, 'opa'))) : 100
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    return { range_from, range_to, angle_range, rotation, ticks, indicators };
+                });
+            }
+        }
 
         if (hasKey(finalPropsNode, 'id')) name = this.resolveText(getKey(finalPropsNode, 'id'));
         if (hasKey(finalPropsNode, 'x')) x = this.parseDimension(getKey(finalPropsNode, 'x'));
@@ -453,7 +529,8 @@ export class YamlEngine {
             grid_cell_column_pos, grid_cell_column_span, grid_cell_row_pos, grid_cell_row_span,
             grid_cell_x_align, grid_cell_y_align, class_names, options,
             hidden, clickable, checkable, checked, long_mode, min_value, max_value, value, range_min, range_max,
-            rotation, start_angle, end_angle, src, style_references: style_references_node, actions
+            rotation, start_angle, end_angle, src, style_references: style_references_node, actions,
+            meter_scales
         } as any;
     }
 
@@ -521,6 +598,8 @@ export class YamlEngine {
         // 1. Update Substitutions
         if (Object.keys(substitutions).length > 0) {
             rootContent.set('substitutions', this.yamlDoc.createNode(substitutions));
+        } else {
+            rootContent.delete('substitutions');
         }
 
         // 2. Update Fonts
@@ -532,6 +611,8 @@ export class YamlEngine {
                 size: a.size
             }));
             rootContent.set('font', this.yamlDoc.createNode(fontNodes));
+        } else {
+            rootContent.delete('font');
         }
 
         // 2b. Update Images
@@ -548,6 +629,8 @@ export class YamlEngine {
                 return node;
             });
             rootContent.set('image', this.yamlDoc.createNode(imageNodes));
+        } else {
+            rootContent.delete('image');
         }
 
         const lvglNode = this.findLvglNode(rootContent, 0);
@@ -567,6 +650,8 @@ export class YamlEngine {
                     return yamlStyle;
                 });
                 lvglNode.set('style_definitions', this.yamlDoc.createNode(styleDefs));
+            } else {
+                lvglNode.delete('style_definitions');
             }
 
             const yamlWidgets = widgets.map(w => this.buildYamlWidget(w));
@@ -631,6 +716,63 @@ export class YamlEngine {
 
         if (w.range_min !== undefined || w.range_max !== undefined) {
             props.range = { min: w.range_min ?? 0, max: w.range_max ?? 100 };
+        }
+
+        if (w.meter_scales && w.meter_scales.length > 0) {
+            props.scales = w.meter_scales.map(scale => {
+                const s: any = {
+                    range_from: scale.range_from,
+                    range_to: scale.range_to,
+                    angle_range: scale.angle_range ?? 270,
+                };
+                if (scale.rotation) s.rotation = scale.rotation;
+
+                s.ticks = { count: scale.ticks.count };
+                if (scale.ticks.color) s.ticks.color = this.formatColor(scale.ticks.color);
+                if (scale.ticks.width) s.ticks.width = scale.ticks.width;
+                if (scale.ticks.length) s.ticks.length = scale.ticks.length;
+                if (scale.ticks.major) {
+                    const m = scale.ticks.major;
+                    s.ticks.major = {};
+                    if (m.stride) s.ticks.major.stride = m.stride;
+                    if (m.width) s.ticks.major.width = m.width;
+                    if (m.length) s.ticks.major.length = m.length;
+                    if (m.color) s.ticks.major.color = this.formatColor(m.color);
+                    if (m.label_gap) s.ticks.major.label_gap = m.label_gap;
+                }
+
+                if (scale.indicators && scale.indicators.length > 0) {
+                    s.indicators = scale.indicators.map(ind => {
+                        const i: any = {};
+                        const type = ind.type;
+                        const data: any = {};
+                        if (ind.id) data.id = ind.id;
+                        if (ind.color) data.color = this.formatColor(ind.color);
+                        if (ind.opa !== 100) data.opa = `${ind.opa}%`;
+
+                        if (type === 'arc') {
+                            if (ind.start_value !== undefined) data.start_value = ind.start_value;
+                            if (ind.end_value !== undefined) data.end_value = ind.end_value;
+                            if (ind.width) data.width = ind.width;
+                            if (ind.r_mod) data.r_mod = ind.r_mod;
+                            i.arc = data;
+                        } else if (type === 'line') {
+                            if (ind.value !== undefined) data.value = ind.value;
+                            if (ind.width) data.width = ind.width;
+                            if (ind.r_mod) data.r_mod = ind.r_mod;
+                            i.line = data;
+                        } else if (type === 'image') {
+                            if (ind.src) data.src = ind.src;
+                            if (ind.value !== undefined) data.value = ind.value;
+                            if (ind.pivot_x !== undefined) data.pivot_x = ind.pivot_x;
+                            if (ind.pivot_y !== undefined) data.pivot_y = ind.pivot_y;
+                            i.image = data;
+                        }
+                        return i;
+                    });
+                }
+                return s;
+            });
         }
 
         if (w.layout) {

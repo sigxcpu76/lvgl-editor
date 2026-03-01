@@ -25,7 +25,12 @@ export const loadGoogleFont = (family: string) => {
     document.head.appendChild(link);
 };
 
-const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void; onPreview?: (asset: Asset) => void }> = ({ asset, onRemove, onPreview }) => {
+const DraggableAssetRaw: React.FC<{
+    asset: Asset;
+    onRemove: (id: string) => void;
+    onPreview?: (asset: Asset) => void;
+    fontFallbacks: string;
+}> = ({ asset, onRemove, onPreview, fontFallbacks }) => {
     const [{ isDragging }, dragRef] = useDrag({
         type: 'asset',
         item: { asset },
@@ -51,11 +56,7 @@ const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void; o
                                 color: 'hsl(var(--primary))',
                                 display: 'inline-block',
                                 lineHeight: 1,
-                                fontFamily: [
-                                    '"Material Design Icons"',
-                                    ...useStore.getState().assets.filter(a => a.type === 'font' && a.family).map(a => `"${a.family}"`),
-                                    'sans-serif'
-                                ].join(', ')
+                                fontFamily: fontFallbacks
                             }}
                             title={`Glyph: \\U${asset.value.codePointAt(0)?.toString(16).padStart(8, '0').toUpperCase()}`}
                         >
@@ -65,9 +66,9 @@ const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void; o
                         <span className={`mdi mdi-${asset.value.replace('mdi:', '')}`} />
                     )
                 ) : asset.type === 'image' ? (
-                    asset.source && (asset.source.startsWith('http') || asset.source.startsWith('data:')) ? (
+                    (asset.thumbnail || asset.source) && ((asset.thumbnail || asset.source)?.startsWith('http') || (asset.thumbnail || asset.source)?.startsWith('data:')) ? (
                         <img
-                            src={asset.source}
+                            src={asset.thumbnail || asset.source}
                             style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '2px', cursor: 'zoom-in' }}
                             alt=""
                             onClick={(e) => {
@@ -93,6 +94,8 @@ const DraggableAsset: React.FC<{ asset: Asset; onRemove: (id: string) => void; o
     );
 };
 
+const DraggableAsset = React.memo(DraggableAssetRaw);
+
 export const AssetManager: React.FC = () => {
     const { assets, addAsset, removeAsset, assetManagerOpen, setAssetManagerOpen, theme } = useStore();
     const [name, setName] = useState('');
@@ -101,6 +104,7 @@ export const AssetManager: React.FC = () => {
     const [family, setFamily] = useState('');
     const [size, setSize] = useState('16');
     const [source, setSource] = useState('');
+    const [thumbnail, setThumbnail] = useState('');
     const [width, setWidth] = useState('100');
     const [height, setHeight] = useState('100');
     const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -111,6 +115,7 @@ export const AssetManager: React.FC = () => {
         if (type === 'image' && originalImage && width && height) {
             const img = new Image();
             img.onload = () => {
+                // Main Scaled Image
                 const canvas = document.createElement('canvas');
                 canvas.width = Number(width) || img.width;
                 canvas.height = Number(height) || img.height;
@@ -118,6 +123,18 @@ export const AssetManager: React.FC = () => {
                 if (ctx) {
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     setSource(canvas.toDataURL('image/png'));
+                }
+
+                // Small Thumbnail (fixed size for UI)
+                const thumbCanvas = document.createElement('canvas');
+                const tSize = 64;
+                const ratio = Math.min(tSize / img.width, tSize / img.height);
+                thumbCanvas.width = img.width * ratio;
+                thumbCanvas.height = img.height * ratio;
+                const tCtx = thumbCanvas.getContext('2d');
+                if (tCtx) {
+                    tCtx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+                    setThumbnail(thumbCanvas.toDataURL('image/png', 0.8));
                 }
             };
             img.src = originalImage;
@@ -132,12 +149,10 @@ export const AssetManager: React.FC = () => {
         reader.onload = (event) => {
             const result = event.target?.result as string;
             setOriginalImage(result);
-            // Auto-fill name if empty
             if (!name) {
                 setName(file.name.split('.')[0].replace(/[^a-z0-9_]/gi, '_').toLowerCase());
             }
 
-            // Get original dimensions to initialize width/height if they are default
             const img = new Image();
             img.onload = () => {
                 if (width === '100' && height === '100') {
@@ -163,10 +178,11 @@ export const AssetManager: React.FC = () => {
             id: uuidv4(),
             name,
             type,
-            value: type === 'icon' ? value : (type === 'image' ? name : name), // Use name as ID for fonts and images
+            value: type === 'icon' ? value : (type === 'image' ? name : name),
             family: type === 'font' ? family : undefined,
             size: type === 'font' ? Number(size) : undefined,
             source: (type === 'font' || type === 'image') ? finalSource : undefined,
+            thumbnail: type === 'image' ? thumbnail : undefined,
             width: type === 'image' ? Number(width) : undefined,
             height: type === 'image' ? Number(height) : undefined
         };
@@ -180,10 +196,17 @@ export const AssetManager: React.FC = () => {
         setValue('');
         setFamily('');
         setSource('');
+        setThumbnail('');
         setOriginalImage(null);
         setWidth('100');
         setHeight('100');
     };
+
+    const fontFallbacks = React.useMemo(() => [
+        '"Material Design Icons"',
+        ...assets.filter(a => a.type === 'font' && a.family).map(a => `"${a.family}"`),
+        'sans-serif'
+    ].join(', '), [assets]);
 
     if (!assetManagerOpen) return null;
 
@@ -324,6 +347,7 @@ export const AssetManager: React.FC = () => {
                                         asset={asset}
                                         onRemove={removeAsset}
                                         onPreview={setPreviewAsset}
+                                        fontFallbacks={fontFallbacks}
                                     />
                                 ))
                             )}
@@ -336,7 +360,7 @@ export const AssetManager: React.FC = () => {
             </div>
 
             {previewAsset && createPortal(
-                <div className="modal-overlay" style={{ zIndex: 3000, background: 'rgba(0,0,0,0.85)' }} onClick={() => setPreviewAsset(null)}>
+                <div className="modal-overlay" style={{ zIndex: 3000 }} onClick={() => setPreviewAsset(null)}>
                     <div className="modal-content" style={{ background: 'transparent', border: 'none', boxShadow: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '90vw', height: '90vh' }}>
                         <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
                             <img

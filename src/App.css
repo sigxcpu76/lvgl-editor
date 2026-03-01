@@ -264,14 +264,15 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity;
 }
 
 @keyframes fadeIn {
@@ -295,17 +296,18 @@ body {
   flex-direction: column;
   box-shadow: var(--shadow-lg), 0 0 50px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: slideUp 0.15s cubic-bezier(0, 0, 0.2, 1);
+  will-change: transform, opacity;
 }
 
 @keyframes slideUp {
   from {
-    transform: translateY(20px) scale(0.98);
+    transform: translate3d(0, 10px, 0);
     opacity: 0;
   }
 
   to {
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
 }

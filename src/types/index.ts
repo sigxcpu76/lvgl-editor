@@ -1,4 +1,4 @@
-export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image';
+export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image' | 'meter';
 
 export interface StyleProperties {
     bg_color?: string;
@@ -33,6 +33,44 @@ export interface StyleReference {
     styles?: StyleProperties;
 }
 
+export interface MeterIndicator {
+    type: 'arc' | 'line' | 'image';
+    id?: string;
+    color?: string;
+    start_value?: number;
+    end_value?: number;
+    value?: number;
+    width?: number;
+    r_mod?: number;
+    opa?: number;
+    src?: string; // For image indicators
+    pivot_x?: number;
+    pivot_y?: number;
+}
+
+export interface MeterTicks {
+    count: number;
+    color?: string;
+    width?: number;
+    length?: number;
+    major?: {
+        stride?: number;
+        width?: number;
+        length?: number | string;
+        color?: string;
+        label_gap?: number;
+    };
+}
+
+export interface MeterScale {
+    range_from: number;
+    range_to: number;
+    angle_range?: number;
+    rotation?: number;
+    ticks: MeterTicks;
+    indicators?: MeterIndicator[];
+}
+
 export interface WidgetNode {
     id: string;
     type: WidgetType;
@@ -64,6 +102,7 @@ export interface WidgetNode {
     rotation?: number;
     start_angle?: number;
     end_angle?: number;
+    meter_scales?: MeterScale[];
 
     layout?: {
         type: 'flex' | 'grid' | 'absolute';
@@ -99,6 +138,7 @@ export interface Asset {
     width?: number; // For images
     height?: number; // For images
     format?: string; // For images
+    thumbnail?: string; // Small Base64 for UI previews
 }
 
 export interface Resolution {

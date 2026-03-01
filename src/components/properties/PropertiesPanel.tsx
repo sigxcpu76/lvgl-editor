@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../../store';
-import { WidgetType, StyleProperties, WidgetNode } from '../../types';
+import { WidgetType, StyleProperties, WidgetNode, MeterScale, MeterIndicator } from '../../types';
 
 const ACTION_TEMPLATES: Record<string, any> = {
     'homeassistant.service': {
@@ -166,6 +166,12 @@ export const PropertiesPanel: React.FC = () => {
     const [activeState, setActiveState] = React.useState<string>('DEFAULT');
     const [newActionInput, setNewActionInput] = React.useState('');
     const [showIconPopover, setShowIconPopover] = React.useState(false);
+
+    const fontFallbacks = React.useMemo(() => [
+        '"Material Design Icons"',
+        ...assets.filter(a => a.type === 'font' && a.family).map(a => `"${a.family}"`),
+        'sans-serif'
+    ].join(', '), [assets]);
 
     // Close popover when clicking outside
     React.useEffect(() => {
@@ -625,11 +631,7 @@ export const PropertiesPanel: React.FC = () => {
                                                     >
                                                         {isGlyph ? (
                                                             <span style={{
-                                                                fontFamily: [
-                                                                    '"Material Design Icons"',
-                                                                    ...assets.filter(a => a.type === 'font' && a.family).map(a => `"${a.family}"`),
-                                                                    'sans-serif'
-                                                                ].join(', '),
+                                                                fontFamily: fontFallbacks,
                                                                 lineHeight: 1
                                                             }}>
                                                                 {asset.value}
@@ -713,15 +715,21 @@ export const PropertiesPanel: React.FC = () => {
                             }
                         </select>
                     </div>
-                    {selectedNode.src && assets.find(a => a.type === 'image' && a.value === selectedNode.src)?.source?.startsWith('data:') && (
-                        <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', textAlign: 'center' }}>
-                            <img
-                                src={assets.find(a => a.type === 'image' && a.value === selectedNode.src)?.source}
-                                style={{ maxWidth: '100%', maxHeight: '100px', objectFit: 'contain' }}
-                                alt="Preview"
-                            />
-                        </div>
-                    )}
+                    {(() => {
+                        const imgAsset = selectedNode.src ? assets.find(a => a.type === 'image' && a.value === selectedNode.src) : null;
+                        if (imgAsset && imgAsset.source && (imgAsset.source.startsWith('data:') || imgAsset.source.startsWith('http'))) {
+                            return (
+                                <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', textAlign: 'center' }}>
+                                    <img
+                                        src={imgAsset.thumbnail || imgAsset.source}
+                                        style={{ maxWidth: '100%', maxHeight: '100px', objectFit: 'contain' }}
+                                        alt="Preview"
+                                    />
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
                 </div>
             )}
 
@@ -751,7 +759,7 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
             )}
 
-            {(selectedNode.type === 'bar' || selectedNode.type === 'slider' || selectedNode.type === 'arc' || selectedNode.type === 'spinbox') && (
+            {(selectedNode.type === 'bar' || selectedNode.type === 'slider' || selectedNode.type === 'arc' || selectedNode.type === 'spinbox' || selectedNode.type === 'meter') && (
                 <div className="property-group">
                     <h3>Value Range</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -807,6 +815,72 @@ export const PropertiesPanel: React.FC = () => {
                                     value={selectedNode.rotation ?? ''}
                                     onChange={(e) => handleNumberProp('rotation', e.target.value)}
                                 />
+                            </div>
+                        </>
+                    )}
+                    {selectedNode.type === 'meter' && (
+                        <>
+                            <div className="nested-group" style={{ borderTop: '0.5px solid var(--border-subtle)', paddingTop: '8px', marginTop: '4px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginBottom: '4px' }}>Meter Scale (Primary)</div>
+                                {(() => {
+                                    const scale = selectedNode.meter_scales?.[0] || {
+                                        range_from: selectedNode.range_min ?? 0,
+                                        range_to: selectedNode.range_max ?? 100,
+                                        angle_range: 270,
+                                        rotation: 0,
+                                        ticks: { count: 12, color: '#888', width: 2, length: 10, major: { stride: 3 } }
+                                    };
+
+                                    const updateScale = (updates: Partial<MeterScale>) => {
+                                        const newScale = { ...scale, ...updates };
+                                        handlePropChange('meter_scales', [newScale]);
+                                    };
+
+                                    const updateTicks = (updates: any) => {
+                                        updateScale({ ticks: { ...scale.ticks, ...updates } });
+                                    };
+
+                                    return (
+                                        <>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                <div className="prop-row" style={{ gridTemplateColumns: '50px 1fr', gap: '4px' }}>
+                                                    <label>Angle</label>
+                                                    <input
+                                                        type="number"
+                                                        value={scale.angle_range ?? 270}
+                                                        onChange={(e) => updateScale({ angle_range: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                                <div className="prop-row" style={{ gridTemplateColumns: '55px 1fr', gap: '4px' }}>
+                                                    <label>Rotation</label>
+                                                    <input
+                                                        type="number"
+                                                        value={scale.rotation ?? 0}
+                                                        onChange={(e) => updateScale({ rotation: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                <div className="prop-row" style={{ gridTemplateColumns: '50px 1fr', gap: '4px' }}>
+                                                    <label>Ticks</label>
+                                                    <input
+                                                        type="number"
+                                                        value={scale.ticks.count}
+                                                        onChange={(e) => updateTicks({ count: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                                <div className="prop-row" style={{ gridTemplateColumns: '55px 1fr', gap: '4px' }}>
+                                                    <label>Stride</label>
+                                                    <input
+                                                        type="number"
+                                                        value={scale.ticks.major?.stride ?? 3}
+                                                        onChange={(e) => updateTicks({ major: { ...(scale.ticks.major || {}), stride: Number(e.target.value) } })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </>
                     )}

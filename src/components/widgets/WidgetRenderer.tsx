@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { WidgetNode, Asset, StyleProperties } from '../../types';
+import { WidgetNode, Asset, StyleProperties, MeterScale, MeterIndicator } from '../../types';
 import { useStore } from '../../store';
 import { useDrag, useDrop } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
@@ -260,13 +260,13 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     type: item.type as any,
                     name: `${item.type}_${Date.now().toString().slice(-4)}`,
                     x, y,
-                    width: item.type === 'slider' || item.type === 'bar' ? 150 : (item.type === 'image' ? 100 : 100),
-                    height: item.type === 'slider' || item.type === 'bar' ? 20 : (item.type === 'image' ? 100 : 40),
+                    width: (item.type === 'slider' || item.type === 'bar') ? 150 : (item.type === 'image' || item.type === 'meter' ? 100 : 100),
+                    height: (item.type === 'slider' || item.type === 'bar') ? 20 : (item.type === 'image' || item.type === 'meter' ? 100 : 40),
                     text: item.type === 'label' || item.type === 'button' ? `${item.type}` : undefined,
                     src: item.type === 'image' ? undefined : undefined,
-                    range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 0 : undefined,
-                    range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 100 : undefined,
-                    value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc') ? 50 : undefined,
+                    range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'meter') ? 0 : undefined,
+                    range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'meter') ? 100 : undefined,
+                    value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'meter') ? 50 : undefined,
                     start_angle: item.type === 'arc' ? 135 : undefined,
                     end_angle: item.type === 'arc' ? 45 : undefined,
                     checkable: item.type === 'switch' ? true : undefined,
@@ -535,6 +535,122 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                         <div style={{ width: 'min(100%, 100%)', aspectRatio: '1', borderRadius: '50%', background: ledColor, boxShadow: node.checked ? `0 0 10px ${ledColor}, inset 0 0 5px rgba(255,255,255,0.5)` : 'inset 0 2px 4px rgba(0,0,0,0.5)', transition: 'all 0.2s' }} />
                     </div>
                 );
+            case 'meter': {
+                const scales: MeterScale[] = node.meter_scales && node.meter_scales.length > 0 ? node.meter_scales : [{
+                    range_from: node.range_min ?? 0,
+                    range_to: node.range_max ?? 100,
+                    angle_range: 270,
+                    rotation: 0,
+                    ticks: { count: 12, color: '#888', width: 2, length: 10, major: { stride: 3, width: 4, length: '15%', color: '#fff' } },
+                    indicators: [{ type: 'line', value: node.value ?? 50, color: '#ff4444', width: 3 }]
+                }];
+
+                return (
+                    <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
+                            {scales.map((scale, sIdx) => {
+                                const min = scale.range_from;
+                                const max = scale.range_to;
+                                const angleRange = scale.angle_range ?? 270;
+                                const rotationOffset = (scale.rotation ?? 0) + 135; // LVGL 0 is usually at 135deg (top-leftish)
+
+                                const valToAngle = (val: number) => {
+                                    const percent = (val - min) / (max - min);
+                                    return rotationOffset + (percent * angleRange);
+                                };
+
+                                return (
+                                    <g key={sIdx}>
+                                        {/* Ticks */}
+                                        {[...Array(scale.ticks.count)].map((_, i) => {
+                                            const angle = (rotationOffset + (i * (angleRange / (scale.ticks.count - 1)))) * Math.PI / 180;
+                                            const isMajor = scale.ticks.major && scale.ticks.major.stride && (i % scale.ticks.major.stride === 0);
+
+                                            const tickLen = isMajor
+                                                ? (typeof scale.ticks.major?.length === 'string' ? parseFloat(scale.ticks.major.length) / 2 : (scale.ticks.major?.length || 15))
+                                                : (scale.ticks.length || 10);
+                                            const tickWidth = isMajor ? (scale.ticks.major?.width || 4) : (scale.ticks.width || 2);
+                                            const tickColor = isMajor ? (scale.ticks.major?.color || '#fff') : (scale.ticks.color || '#888');
+
+                                            const x1 = 50 + (48 - tickLen) * Math.cos(angle);
+                                            const y1 = 50 + (48 - tickLen) * Math.sin(angle);
+                                            const x2 = 50 + 48 * Math.cos(angle);
+                                            const y2 = 50 + 48 * Math.sin(angle);
+
+                                            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={resolveValue(tickColor)} strokeWidth={tickWidth / 2} />;
+                                        })}
+
+                                        {/* Indicators */}
+                                        {scale.indicators?.map((ind: MeterIndicator, iIdx: number) => {
+                                            if (ind.type === 'arc') {
+                                                const start = valToAngle(ind.start_value ?? min);
+                                                const end = valToAngle(ind.end_value ?? max);
+                                                const r = 40 + (ind.r_mod ?? 0);
+
+                                                const polarToCartesian = (cx: number, cy: number, r: number, angle: number) => {
+                                                    const rad = (angle * Math.PI) / 180.0;
+                                                    return { x: cx + (r * Math.cos(rad)), y: cy + (r * Math.sin(rad)) };
+                                                };
+
+                                                const sP = polarToCartesian(50, 50, r, start);
+                                                const eP = polarToCartesian(50, 50, r, end);
+                                                const largeArcFlag = end - start <= 180 ? "0" : "1";
+                                                const d = ["M", sP.x, sP.y, "A", r, r, 0, largeArcFlag, 1, eP.x, eP.y].join(" ");
+
+                                                return <path key={iIdx} d={d} fill="none" stroke={resolveValue(ind.color || '#007acc')} strokeWidth={ind.width || 4} strokeLinecap="round" style={{ opacity: (ind.opa ?? 100) / 100 }} />;
+                                            }
+
+                                            if (ind.type === 'line') {
+                                                const angle = valToAngle(ind.value ?? node.value ?? 50) * Math.PI / 180;
+                                                const r = 40 + (ind.r_mod ?? 0);
+                                                const x2 = 50 + r * Math.cos(angle);
+                                                const y2 = 50 + r * Math.sin(angle);
+
+                                                return (
+                                                    <g key={iIdx}>
+                                                        <line
+                                                            x1="50" y1="50"
+                                                            x2={x2} y2={y2}
+                                                            stroke={resolveValue(ind.color || '#ff4444')}
+                                                            strokeWidth={ind.width || 3}
+                                                            strokeLinecap="round"
+                                                            style={{ opacity: (ind.opa ?? 100) / 100 }}
+                                                        />
+                                                        <circle cx="50" cy="50" r="4" fill={resolveValue(ind.color || '#ff4444')} />
+                                                    </g>
+                                                );
+                                            }
+
+                                            if (ind.type === 'image') {
+                                                const angle = valToAngle(ind.value ?? node.value ?? 50);
+                                                const imgAsset = assets.find(a => a.type === 'image' && (a.value === ind.src || a.name === ind.src));
+                                                if (imgAsset && imgAsset.source) {
+                                                    return (
+                                                        <image
+                                                            key={iIdx}
+                                                            href={imgAsset.source}
+                                                            x={50 - (ind.pivot_x ?? 50)}
+                                                            y={50 - (ind.pivot_y ?? 10)}
+                                                            width={imgAsset.width ? (imgAsset.width / (imgAsset.height || 100) * 100) : 100}
+                                                            height="100"
+                                                            style={{
+                                                                transform: `rotate(${angle}deg)`,
+                                                                transformOrigin: `${ind.pivot_x ?? 50}px ${ind.pivot_y ?? 10}px`,
+                                                                opacity: (ind.opa ?? 100) / 100
+                                                            }}
+                                                        />
+                                                    );
+                                                }
+                                            }
+                                            return null;
+                                        })}
+                                    </g>
+                                );
+                            })}
+                        </svg>
+                    </div>
+                );
+            }
             case 'image': {
                 const imgAsset = assets.find(a => a.type === 'image' && (a.value === node.src || a.name === node.src));
                 if (imgAsset && imgAsset.source) {
