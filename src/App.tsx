@@ -220,86 +220,94 @@ function App() {
                         <h1>ESPHome LVGL Editor</h1>
                     </div>
 
-                    <div className="toolbar-actions" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                    <div className="toolbar-actions" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {/* Group 1: Project */}
                         <div className="toolbar-group">
                             <span className="toolbar-group-label">Project</span>
-                            <button
-                                className="btn-icon"
-                                onClick={() => {
-                                    if (window.confirm('Start from scratch? All current changes will be lost.')) {
-                                        resetState();
-                                    }
-                                }}
-                                title="New Project"
-                            >
-                                <span className="mdi mdi-file-plus-outline" />
-                            </button>
+                            <div className="btn-group">
+                                <button
+                                    className="btn-icon"
+                                    onClick={() => {
+                                        if (window.confirm('Start from scratch? All current changes will be lost.')) {
+                                            resetState();
+                                        }
+                                    }}
+                                    title="New Project"
+                                >
+                                    <span className="mdi mdi-file-plus-outline" />
+                                </button>
 
-                            <label className="btn-icon" style={{ cursor: 'pointer', margin: 0 }} title="Load YAML">
-                                <span className="mdi mdi-folder-open-outline" />
-                                <input
-                                    type="file"
-                                    accept=".yaml,.yml"
-                                    style={{ display: 'none' }}
-                                    onChange={handleImport}
-                                />
-                            </label>
+                                <label className="btn-icon" style={{ cursor: 'pointer', margin: 0 }} title="Load YAML">
+                                    <span className="mdi mdi-folder-open-outline" />
+                                    <input
+                                        type="file"
+                                        accept=".yaml,.yml"
+                                        style={{ display: 'none' }}
+                                        onChange={handleImport}
+                                    />
+                                </label>
 
-                            <button className="btn-icon" onClick={handleExport} title="Export YAML">
-                                <span className="mdi mdi-content-save-outline" />
-                            </button>
+                                <button className="btn-icon" onClick={handleExport} title="Export YAML">
+                                    <span className="mdi mdi-content-save-outline" />
+                                </button>
 
-                            <button
-                                className="btn-icon primary"
-                                onClick={() => setEmulatorOpen(true)}
-                                title="Run Emulator"
-                                style={{ marginLeft: '4px' }}
-                            >
-                                <span className="mdi mdi-play" />
-                            </button>
+                                <button
+                                    className="btn-icon primary"
+                                    onClick={() => setEmulatorOpen(true)}
+                                    title="Run Emulator"
+                                >
+                                    <span className="mdi mdi-play" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Group 2: View */}
                         <div className="toolbar-group">
                             <span className="toolbar-group-label">View</span>
-                            <ThemeToggle />
-                            <CanvasSettings />
+                            <div className="btn-group">
+                                <ThemeToggle />
+                                <CanvasSettings />
+                            </div>
                         </div>
 
+                        {/* Group 3: Resources */}
                         <div className="toolbar-group">
-                            <span className="toolbar-group-label">Resources</span>
-                            <button className="btn-icon" onClick={() => openStyleEditor()} title="Global Styles Editor">
-                                <span className="mdi mdi-palette-swatch-outline" />
-                            </button>
-                            <button
-                                className="btn-icon"
-                                onClick={() => setAssetManagerOpen(true)}
-                                title="Asset Manager"
-                            >
-                                <span className="mdi mdi-folder-multiple-image" />
-                            </button>
+                            <span className="toolbar-group-label">Assets</span>
+                            <div className="btn-group">
+                                <button className="btn-icon" onClick={() => openStyleEditor()} title="Global Styles Editor">
+                                    <span className="mdi mdi-palette-swatch-outline" />
+                                </button>
+                                <button
+                                    className="btn-icon"
+                                    onClick={() => setAssetManagerOpen(true)}
+                                    title="Asset Manager"
+                                >
+                                    <span className="mdi mdi-folder-multiple-image" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Group 4: History */}
                         <div className="toolbar-group">
                             <span className="toolbar-group-label">History</span>
-                            <button
-                                className="btn-icon"
-                                onClick={undo}
-                                disabled={!canUndo}
-                                title="Undo (Ctrl+Z)"
-                            >
-                                <span className="mdi mdi-undo" />
-                            </button>
-                            <button
-                                className="btn-icon"
-                                onClick={redo}
-                                disabled={!canRedo}
-                                title="Redo (Ctrl+Y)"
-                            >
-                                <span className="mdi mdi-redo" />
-                            </button>
+                            <div className="btn-group">
+                                <button
+                                    className="btn-icon"
+                                    onClick={undo}
+                                    disabled={!canUndo}
+                                    title="Undo (Ctrl+Z)"
+                                >
+                                    <span className="mdi mdi-undo" />
+                                </button>
+                                <button
+                                    className="btn-icon"
+                                    onClick={redo}
+                                    disabled={!canRedo}
+                                    title="Redo (Ctrl+Y)"
+                                >
+                                    <span className="mdi mdi-redo" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </header>

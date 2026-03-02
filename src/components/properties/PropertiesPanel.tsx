@@ -161,6 +161,61 @@ const ActionStepEditor: React.FC<{
     );
 };
 
+const SegmentedControl: React.FC<{
+    options: { label: string | React.ReactNode, value: any }[];
+    value: any;
+    onChange: (val: any) => void;
+}> = ({ options, value, onChange }) => (
+    <div style={{ display: 'flex', background: 'hsl(var(--bg-surface))', padding: '2px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+        {options.map(opt => (
+            <button
+                key={String(opt.value)}
+                onClick={() => onChange(opt.value)}
+                style={{
+                    flex: 1,
+                    padding: '4px 8px',
+                    border: 'none',
+                    borderRadius: 'calc(var(--radius-sm) - 2px)',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: value === opt.value ? 'hsl(var(--bg-surface-elevated))' : 'transparent',
+                    color: value === opt.value ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
+                    transition: 'var(--transition-fast)',
+                    boxShadow: value === opt.value ? 'var(--shadow-sm)' : 'none'
+                }}
+            >
+                {opt.label}
+            </button>
+        ))}
+    </div>
+);
+
+const ColorInput: React.FC<{
+    value: string;
+    onChange: (val: string) => void;
+    label: string;
+}> = ({ value, onChange, label }) => (
+    <div className="prop-row" style={{ gridTemplateColumns: '80px 1fr 32px' }}>
+        <label>{label}</label>
+        <input
+            type="text"
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="#RRGGBB"
+            style={{ fontFamily: 'monospace' }}
+        />
+        <div style={{ position: 'relative', width: '32px', height: '24px', borderRadius: '4px', border: '1px solid var(--border-muted)', background: value || 'transparent', cursor: 'pointer' }}>
+            <input
+                type="color"
+                value={value && value.startsWith('#') && value.length === 7 ? value : '#000000'}
+                onChange={(e) => onChange(e.target.value)}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+            />
+        </div>
+    </div>
+);
+
 export const PropertiesPanel: React.FC = () => {
     const { widgets, selectedIds, updateWidget, global_styles, assets } = useStore();
     const [activeState, setActiveState] = React.useState<string>('DEFAULT');
@@ -291,7 +346,10 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
             )}
             <div className="property-group">
-                <h3>General</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <div style={{ width: '4px', height: '16px', background: 'hsl(var(--primary))', borderRadius: '2px' }} />
+                    <h3 style={{ margin: 0 }}>General</h3>
+                </div>
                 <div className="prop-row">
                     <label>ID</label>
                     <input
@@ -302,8 +360,8 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
                 <div className="prop-row">
                     <label>Type</label>
-                    <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', fontWeight: 500 }}>
-                        {selectedNode.type.toUpperCase()}
+                    <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {selectedNode.type}
                     </div>
                 </div>
             </div>
@@ -421,17 +479,15 @@ export const PropertiesPanel: React.FC = () => {
 
                 <div className="prop-row">
                     <label>Layout</label>
-                    <select
+                    <SegmentedControl
                         value={selectedNode.layout?.type || 'absolute'}
-                        onChange={(e) => {
-                            const type = e.target.value as any;
-                            handlePropChange('layout', { ...(selectedNode.layout || {}), type });
-                        }}
-                    >
-                        <option value="absolute">Absolute</option>
-                        <option value="flex">Flex</option>
-                        <option value="grid">Grid</option>
-                    </select>
+                        onChange={(type) => handlePropChange('layout', { ...(selectedNode.layout || {}), type })}
+                        options={[
+                            { label: 'Abs', value: 'absolute' },
+                            { label: 'Flex', value: 'flex' },
+                            { label: 'Grid', value: 'grid' }
+                        ]}
+                    />
                 </div>
 
                 {selectedNode.layout?.type === 'flex' && (
@@ -1043,49 +1099,26 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
                 <div className="prop-row">
                     <label>T-Align</label>
-                    <select
+                    <SegmentedControl
                         value={getStyleValue('text_align') || 'LEFT'}
-                        onChange={(e) => handleStyleChange('text_align', e.target.value)}
-                    >
-                        <option value="LEFT">Left</option>
-                        <option value="CENTER">Center</option>
-                        <option value="RIGHT">Right</option>
-                    </select>
+                        onChange={(val) => handleStyleChange('text_align', val)}
+                        options={[
+                            { label: <i className="mdi mdi-format-align-left" />, value: 'LEFT' },
+                            { label: <i className="mdi mdi-format-align-center" />, value: 'CENTER' },
+                            { label: <i className="mdi mdi-format-align-right" />, value: 'RIGHT' }
+                        ]}
+                    />
                 </div>
-                <div className="prop-row">
-                    <label>Bg Color</label>
-                    <div className="color-input-group">
-                        <input
-                            type="color"
-                            value={getStyleValue('bg_color') || '#000000'}
-                            onChange={(e) => handleStyleChange('bg_color', e.target.value)}
-                        />
-                        <input
-                            type="text"
-                            value={getStyleValue('bg_color') || ''}
-                            onChange={(e) => handleStyleChange('bg_color', e.target.value)}
-                            placeholder={activeState === 'DEFAULT' ? "hex" : (selectedNode.styles?.bg_color || "hex")}
-                            className="text-input-compact"
-                        />
-                    </div>
-                </div>
-                <div className="prop-row">
-                    <label>Text Color</label>
-                    <div className="color-input-group">
-                        <input
-                            type="color"
-                            value={getStyleValue('text_color') || '#ffffff'}
-                            onChange={(e) => handleStyleChange('text_color', e.target.value)}
-                        />
-                        <input
-                            type="text"
-                            value={getStyleValue('text_color') || ''}
-                            onChange={(e) => handleStyleChange('text_color', e.target.value)}
-                            placeholder={activeState === 'DEFAULT' ? "hex" : (selectedNode.styles?.text_color || "hex")}
-                            className="text-input-compact"
-                        />
-                    </div>
-                </div>
+                <ColorInput
+                    label="Bg Color"
+                    value={getStyleValue('bg_color') || ''}
+                    onChange={(val) => handleStyleChange('bg_color', val)}
+                />
+                <ColorInput
+                    label="Text Color"
+                    value={getStyleValue('text_color') || ''}
+                    onChange={(val) => handleStyleChange('text_color', val)}
+                />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="prop-row" style={{ gridTemplateColumns: '45px 1fr', gap: '4px' }}>
                         <label>Radius</label>
