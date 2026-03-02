@@ -1111,12 +1111,12 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
                 <ColorInput
                     label="Bg Color"
-                    value={getStyleValue('bg_color') || ''}
+                    value={String(getStyleValue('bg_color') || '')}
                     onChange={(val) => handleStyleChange('bg_color', val)}
                 />
                 <ColorInput
                     label="Text Color"
-                    value={getStyleValue('text_color') || ''}
+                    value={String(getStyleValue('text_color') || '')}
                     onChange={(val) => handleStyleChange('text_color', val)}
                 />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
