@@ -265,6 +265,20 @@ export const useStore = create<EditorState>((set) => ({
         set((state) => {
             const widget = findWidgetInTree(state.widgets, id);
             if (!widget) return state;
+
+            // Structural restrictions:
+            // 1. Tabs can only be children of tabviews
+            if (widget.type === 'tab') {
+                const targetParent = parentId ? findWidgetInTree(state.widgets, parentId) : null;
+                if (targetParent?.type !== 'tabview') return state;
+            }
+
+            // 2. Non-tabs cannot be direct children of tabviews
+            if (widget.type !== 'tab' && parentId) {
+                const targetParent = findWidgetInTree(state.widgets, parentId);
+                if (targetParent?.type === 'tabview') return state;
+            }
+
             const treeWithoutWidget = removeWidgetsFromTree(state.widgets, [id]);
             const newWidgets = insertWidgetInTree(treeWithoutWidget, parentId, widget, index);
             return {

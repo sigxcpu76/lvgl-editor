@@ -29,6 +29,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
 
     const isSelected = selectedIds.includes(node.id);
     const [isResizing, setIsResizing] = useState(false);
+    const [activeTabIndex, setActiveTabIndex] = useState(0);
 
     const snapValue = useCallback((val: number) => {
         if (!gridConfig.enabled) return Math.round(val);
@@ -104,7 +105,7 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
     }, [node.id, node.width, node.height, node.x, node.y, updateWidget, gridConfig, canvasConfig, snapValue]);
 
     const handleDragStart = useCallback((e: React.MouseEvent) => {
-        if (isResizing || isRoot) return;
+        if (isResizing || isRoot || node.type === 'tab') return;
 
         const isContainer = ['object', 'page'].includes(node.type) && !node.clickable;
 
@@ -248,6 +249,30 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             const x = snapValue((clientOffset.x - rect.left) / scale);
             const y = snapValue((clientOffset.y - rect.top) / scale);
 
+            // If dropping a widget onto a tabview, redirect it to the active tab
+            if (item.type !== 'tab' && node.type === 'tabview') {
+                const tabs = node.children.filter(c => c.type === 'tab');
+                const activeTab = tabs[activeTabIndex];
+                if (activeTab) {
+                    if (item.id) {
+                        useStore.getState().moveWidget(item.id, activeTab.id, 0);
+                    } else if (item.type) {
+                        const newWidget: WidgetNode = {
+                            id: uuidv4(),
+                            type: item.type as any,
+                            name: `${item.type}_${Date.now().toString().slice(-4)}`,
+                            x: 0, y: 0, // Reset to 0 since it's inside the tab
+                            width: (item.type === 'slider' || item.type === 'bar') ? 150 : (item.type === 'image' || item.type === 'meter' ? 100 : 100),
+                            height: (item.type === 'slider' || item.type === 'bar') ? 20 : (item.type === 'image' || item.type === 'meter' ? 100 : 40),
+                            text: item.type === 'label' || item.type === 'button' ? `${item.type}` : undefined,
+                            children: []
+                        };
+                        useStore.getState().addWidget(activeTab.id, newWidget);
+                    }
+                    return;
+                }
+            }
+
             if (item.id && item.id !== node.id) {
                 useStore.getState().moveWidget(item.id, node.id, node.children?.length || 0);
                 useStore.getState().updateWidget(item.id, { x, y });
@@ -260,8 +285,8 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     type: item.type as any,
                     name: `${item.type}_${Date.now().toString().slice(-4)}`,
                     x, y,
-                    width: (item.type === 'slider' || item.type === 'bar') ? 150 : (item.type === 'image' || item.type === 'meter' ? 100 : 100),
-                    height: (item.type === 'slider' || item.type === 'bar') ? 20 : (item.type === 'image' || item.type === 'meter' ? 100 : 40),
+                    width: (item.type === 'slider' || item.type === 'bar') ? 150 : (item.type === 'image' || item.type === 'meter' || item.type === 'tabview' ? 200 : 100),
+                    height: (item.type === 'slider' || item.type === 'bar') ? 20 : (item.type === 'image' || item.type === 'meter' || item.type === 'tabview' ? 150 : 40),
                     text: item.type === 'label' || item.type === 'button' ? `${item.type}` : undefined,
                     src: item.type === 'image' ? undefined : undefined,
                     range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'meter') ? 0 : undefined,
@@ -270,7 +295,14 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     start_angle: item.type === 'arc' ? 135 : undefined,
                     end_angle: item.type === 'arc' ? 45 : undefined,
                     checkable: item.type === 'switch' ? true : undefined,
-                    children: []
+                    children: item.type === 'tabview' ? [{
+                        id: uuidv4(),
+                        type: 'tab',
+                        name: `tab_1`,
+                        text: 'Tab 1',
+                        x: 0, y: 0, width: '100%', height: '100%',
+                        children: []
+                    }] : []
                 };
                 useStore.getState().addWidget(node.id, newWidget);
                 useStore.getState().setSelectedIds([newWidget.id]);
@@ -374,8 +406,8 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
             position: (isRoot || parentLayout === 'flex' || parentLayout === 'grid' || isFlex || isGrid) ? 'relative' : 'absolute',
             left: isRoot ? 0 : (node.x !== undefined ? processDim(node.x) : undefined),
             top: isRoot ? 0 : (node.y !== undefined ? processDim(node.y) : undefined),
-            width: isRoot ? '100%' : processDim(node.width),
-            height: isRoot ? '100%' : processDim(node.height),
+            width: (isRoot || node.type === 'tab') ? '100%' : processDim(node.width),
+            height: (isRoot || node.type === 'tab') ? '100%' : processDim(node.height),
             backgroundColor: bgColor,
             color: resolveValue(s.text_color || '#ffffff'),
             textAlign: s.text_align ? (s.text_align.toLowerCase() as any) : 'left',
@@ -666,6 +698,61 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
                     </div>
                 );
             }
+            case 'tabview': {
+                const tabs = node.children.filter(c => c.type === 'tab');
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', overflow: 'hidden' }}>
+                        <div className="tabview-header" style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', height: '40px', borderBottom: '1px solid rgba(255,255,255,0.1)', overflowX: 'auto', flexShrink: 0 }}>
+                            {tabs.map((tab, idx) => (
+                                <div
+                                    key={tab.id}
+                                    onClick={(e) => { e.stopPropagation(); setActiveTabIndex(idx); }}
+                                    style={{
+                                        padding: '0 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        fontWeight: activeTabIndex === idx ? 'bold' : 'normal',
+                                        color: activeTabIndex === idx ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
+                                        borderBottom: activeTabIndex === idx ? '2px solid hsl(var(--primary))' : 'none',
+                                        background: activeTabIndex === idx ? 'rgba(255,255,255,0.05)' : 'transparent',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {tab.text || tab.name}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="tabview-content" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                            {tabs[activeTabIndex] && (
+                                <WidgetRenderer
+                                    key={tabs[activeTabIndex].id}
+                                    node={tabs[activeTabIndex]}
+                                    parentId={node.id}
+                                    parentLayout="absolute"
+                                />
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+            case 'tab': {
+                return (
+                    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                        {node.children && node.children.map(child => (
+                            <WidgetRenderer
+                                key={child.id}
+                                node={child}
+                                parentId={node.id}
+                                parentLayout={node.layout?.type || 'absolute'}
+                                parentFlexFlow={node.layout?.flex_flow}
+                            />
+                        ))}
+                    </div>
+                );
+            }
             default: return null;
         }
     };
@@ -683,8 +770,8 @@ export const WidgetRenderer: React.FC<Props> = ({ node, isRoot, parentId = null,
         <div ref={setRef} className={`widget-node widget-type-${node.type} ${isSelected ? 'selected' : ''}`} style={getStyles()} onClick={handleClick} onMouseDown={handleDragStart} data-widget-id={node.id}>
             {isRoot && gridConfig.visible && <div className="grid-overlay" style={{ position: 'absolute', top: 0, left: 0, width: 'calc(100% + 1px)', height: 'calc(100% + 1px)', pointerEvents: 'none', zIndex: -1, backgroundImage: `radial-gradient(circle at 0px 0px, ${gridColor} 1px, transparent 0)`, backgroundSize: `${gridConfig.size}px ${gridConfig.size}px`, backgroundPosition: '0 0' }} />}
             {renderContent(s)}
-            {node.children && node.children.map(child => <WidgetRenderer key={child.id} node={child} parentId={node.id} parentLayout={node.layout?.type || 'absolute'} parentFlexFlow={node.layout?.flex_flow} />)}
-            {isSelected && (
+            {node.type !== 'tabview' && node.type !== 'tab' && node.children && node.children.map(child => <WidgetRenderer key={child.id} node={child} parentId={node.id} parentLayout={node.layout?.type || 'absolute'} parentFlexFlow={node.layout?.flex_flow} />)}
+            {isSelected && node.type !== 'tab' && (
                 <>
                     <div className="resize-handle top-left" onMouseDown={handleResizeStart('nw')} />
                     <div className="resize-handle top-right" onMouseDown={handleResizeStart('ne')} />

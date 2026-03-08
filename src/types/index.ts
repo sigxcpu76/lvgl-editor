@@ -1,4 +1,4 @@
-export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image' | 'meter';
+export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image' | 'meter' | 'tabview' | 'tab';
 
 export interface StyleProperties {
     bg_color?: string;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../../store';
 import { WidgetType, StyleProperties, WidgetNode, MeterScale, MeterIndicator } from '../../types';
+import { v4 as uuidv4 } from 'uuid';
 
 const ACTION_TEMPLATES: Record<string, any> = {
     'homeassistant.service': {
@@ -408,8 +409,9 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
             </div>
 
-            <div className="property-group">
-                <h3>Layout</h3>
+            {selectedNode.type !== 'tab' && (
+                <div className="property-group">
+                    <h3>Layout</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr' }}>
                         <label>X</label>
@@ -610,6 +612,7 @@ export const PropertiesPanel: React.FC = () => {
                     </div>
                 </div>
             </div>
+            )}
             {(selectedNode.type === 'label' || selectedNode.type === 'button' || selectedNode.type === 'checkbox' || selectedNode.type === 'textarea') && (
                 <div className="property-group">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -748,6 +751,63 @@ export const PropertiesPanel: React.FC = () => {
                             </select>
                         </div>
                     )}
+                </div>
+            )}
+
+            {selectedNode.type === 'tabview' && (
+                <div className="property-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0 }}>Tabs</h3>
+                        <button 
+                            onClick={() => {
+                                const newTabId = uuidv4();
+                                const newTab: WidgetNode = {
+                                    id: newTabId,
+                                    type: 'tab',
+                                    name: `tab_${selectedNode.children.length + 1}`,
+                                    text: `Tab ${selectedNode.children.length + 1}`,
+                                    x: 0, y: 0, width: '100%', height: '100%',
+                                    children: []
+                                };
+                                useStore.getState().addWidget(selectedNode.id, newTab);
+                            }}
+                            className="btn-primary-small"
+                            style={{ 
+                                padding: '2px 8px', 
+                                fontSize: '0.7rem', 
+                                background: 'hsl(var(--primary))', 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: '4px', 
+                                cursor: 'pointer' 
+                            }}
+                        >
+                            + Add Tab
+                        </button>
+                    </div>
+                    <div className="tabs-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {selectedNode.children.filter(c => c.type === 'tab').map((tab, idx) => (
+                            <div key={tab.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '6px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', width: '20px' }}>{idx + 1}</div>
+                                <input 
+                                    type="text" 
+                                    value={tab.text || ''} 
+                                    onChange={(e) => {
+                                        useStore.getState().updateWidget(tab.id, { text: e.target.value });
+                                    }}
+                                    placeholder="Tab Name"
+                                    style={{ flex: 1, fontSize: '0.75rem', padding: '2px 6px', background: 'transparent', border: '1px solid var(--border-muted)', borderRadius: '3px', color: 'hsl(var(--text-main))' }}
+                                />
+                                <button 
+                                    onClick={() => useStore.getState().removeWidget(tab.id)}
+                                    style={{ background: 'transparent', border: 'none', color: 'hsl(var(--destructive))', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                    title="Delete Tab"
+                                >
+                                    <span className="mdi mdi-delete-outline" style={{ fontSize: '1rem' }} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 

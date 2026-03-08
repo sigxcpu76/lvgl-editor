@@ -53,6 +53,7 @@ export const WidgetPalette: React.FC = () => {
             name: 'Basic',
             widgets: [
                 { type: 'object', label: 'Container', icon: 'square-outline' },
+                { type: 'tabview', label: 'Tab View', icon: 'tab' },
                 { type: 'label', label: 'Label', icon: 'format-text' },
                 { type: 'image', label: 'Image', icon: 'image-outline' },
             ]

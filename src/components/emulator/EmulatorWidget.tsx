@@ -16,6 +16,7 @@ export const EmulatorWidget: React.FC<Props> = ({ node, isRoot, parentId = null,
     const [isPressed, setIsPressed] = useState(false);
     const [isChecked, setIsChecked] = useState(node.checked || false);
     const [isFocused, setIsFocused] = useState(false);
+    const [activeTabIndex, setActiveTabIndex] = useState(0);
 
     const resolveValue = useCallback((val: any): any => {
         if (typeof val !== 'string') return val;
@@ -170,14 +171,14 @@ export const EmulatorWidget: React.FC<Props> = ({ node, isRoot, parentId = null,
             gridTemplateRows: isGrid ? (nodeLayout.grid_dsc_rows?.map(r => processDim(r)).join(' ') || '1fr') : undefined,
             flexGrow: nodeLayout.flex_grow || 0,
             gap: `${nodeLayout.pad_row || 0}px ${nodeLayout.pad_column || 0}px`,
-            cursor: (node.clickable || node.checkable || ['button', 'switch', 'checkbox', 'slider', 'arc', 'spinbox', 'dropdown', 'roller', 'textarea'].includes(node.type)) ? 'pointer' : 'default',
+            cursor: (node.clickable || node.checkable || ['button', 'switch', 'checkbox', 'slider', 'arc', 'spinbox', 'dropdown', 'roller', 'textarea', 'tabview'].includes(node.type)) ? 'pointer' : 'default',
             overflow: 'hidden',
             fontFamily: typeof s.text_font === 'string' ? `"${s.text_font}", sans-serif` : 'inherit',
             transition: 'all 0.1s ease', // Smooth state transitions
             userSelect: 'none',
             zIndex: isRoot ? 1 : 10,
             // pointer-events fix: ensure interactive widgets receive events
-            pointerEvents: (node.clickable || node.checkable || ['button', 'switch', 'checkbox', 'slider', 'arc', 'spinbox', 'dropdown', 'roller', 'textarea', 'object', 'page'].includes(node.type) || isRoot) ? 'auto' : 'none',
+            pointerEvents: (node.clickable || node.checkable || ['button', 'switch', 'checkbox', 'slider', 'arc', 'spinbox', 'dropdown', 'roller', 'textarea', 'object', 'page', 'tabview'].includes(node.type) || isRoot) ? 'auto' : 'none',
         };
 
         // Grid child positioning
@@ -393,6 +394,47 @@ export const EmulatorWidget: React.FC<Props> = ({ node, isRoot, parentId = null,
                     </div>
                 );
             }
+            case 'tabview': {
+                const tabs = node.children.filter(c => c.type === 'tab');
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: resolveValue(s.bg_color || '#333'), borderRadius: '4px', overflow: 'hidden' }}>
+                        <div className="tabview-header" style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', height: '40px', borderBottom: '1px solid rgba(255,255,255,0.1)', overflowX: 'auto', flexShrink: 0 }}>
+                            {tabs.map((tab, idx) => (
+                                <div
+                                    key={tab.id}
+                                    onClick={(e) => { e.stopPropagation(); setActiveTabIndex(idx); }}
+                                    style={{
+                                        padding: '0 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        fontWeight: activeTabIndex === idx ? 'bold' : 'normal',
+                                        color: activeTabIndex === idx ? (s.arc_color || '#007acc') : (s.text_color || '#888'),
+                                        borderBottom: activeTabIndex === idx ? `2px solid ${s.arc_color || '#007acc'}` : 'none',
+                                        background: activeTabIndex === idx ? 'rgba(255,255,255,0.05)' : 'transparent',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {tab.text || tab.name}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="tabview-content" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                            {tabs[activeTabIndex] && (
+                                <EmulatorWidget
+                                    key={tabs[activeTabIndex].id}
+                                    node={tabs[activeTabIndex]}
+                                    parentId={node.id}
+                                    parentLayout="absolute"
+                                />
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+            case 'tab':
             case 'page':
             case 'object':
             default:
@@ -419,7 +461,7 @@ export const EmulatorWidget: React.FC<Props> = ({ node, isRoot, parentId = null,
             }}
         >
             {renderContent()}
-            {node.children?.map(child => (
+            {node.type !== 'tabview' && node.children?.map(child => (
                 <EmulatorWidget
                     key={child.id}
                     node={child}
