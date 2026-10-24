@@ -17,6 +17,21 @@ const ACTION_TEMPLATES: Record<string, any> = {
         state: { checked: true }
     },
     'lvgl.page.show': 'main_page',
+    'lvgl.tabview.select': {
+        id: '',
+        tab: 0
+    },
+    'lvgl.display.set_rotation': 0,
+    'lvgl.spinbox.increment': {
+        id: ''
+    },
+    'lvgl.spinbox.decrement': {
+        id: ''
+    },
+    'lvgl.indicator.update': {
+        id: '',
+        value: 0
+    },
     'light.turn_on': {
         id: '',
         brightness: '100%'
@@ -785,6 +800,18 @@ export const PropertiesPanel: React.FC = () => {
                             + Add Tab
                         </button>
                     </div>
+                    <div className="prop-row" style={{ marginBottom: '8px' }}>
+                        <label>Position</label>
+                        <select
+                            value={selectedNode.tab_position || 'TOP'}
+                            onChange={(e) => handlePropChange('tab_position', e.target.value)}
+                        >
+                            <option value="TOP">Top</option>
+                            <option value="BOTTOM">Bottom</option>
+                            <option value="LEFT">Left</option>
+                            <option value="RIGHT">Right</option>
+                        </select>
+                    </div>
                     <div className="tabs-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {selectedNode.children.filter(c => c.type === 'tab').map((tab, idx) => (
                             <div key={tab.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '6px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
@@ -811,9 +838,24 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
             )}
 
+            {selectedNode.type === 'tab' && (
+                <div className="property-group">
+                    <h3>Tab</h3>
+                    <div className="prop-row">
+                        <label>Title</label>
+                        <input
+                            type="text"
+                            value={selectedNode.text || ''}
+                            onChange={(e) => handlePropChange('text', e.target.value)}
+                            placeholder="Tab Title"
+                        />
+                    </div>
+                </div>
+            )}
+
             {selectedNode.type === 'image' && (
                 <div className="property-group">
-                    <h3>Image</h3>
+                    <h3>Image (LVGL 9)</h3>
                     <div className="prop-row">
                         <label>Source</label>
                         <select
@@ -830,6 +872,53 @@ export const PropertiesPanel: React.FC = () => {
                                 ))
                             }
                         </select>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '8px' }}>
+                        <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                            <label>Scale</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                min="0.1"
+                                max="10"
+                                value={selectedNode.scale ?? 1.0}
+                                onChange={(e) => handleNumberProp('scale', e.target.value)}
+                            />
+                        </div>
+                        <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                            <label>Angle</label>
+                            <input
+                                type="number"
+                                value={selectedNode.rotation ?? 0}
+                                onChange={(e) => handleNumberProp('rotation', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                            <label>ScaleX</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                min="0.1"
+                                max="10"
+                                value={selectedNode.scale_x ?? ''}
+                                onChange={(e) => handleNumberProp('scale_x', e.target.value)}
+                                placeholder="Auto"
+                            />
+                        </div>
+                        <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                            <label>ScaleY</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                min="0.1"
+                                max="10"
+                                value={selectedNode.scale_y ?? ''}
+                                onChange={(e) => handleNumberProp('scale_y', e.target.value)}
+                                placeholder="Auto"
+                            />
+                        </div>
                     </div>
                     {(() => {
                         const imgAsset = selectedNode.src ? assets.find(a => a.type === 'image' && a.value === selectedNode.src) : null;
@@ -875,7 +964,7 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
             )}
 
-            {(selectedNode.type === 'bar' || selectedNode.type === 'slider' || selectedNode.type === 'arc' || selectedNode.type === 'spinbox' || selectedNode.type === 'meter') && (
+            {(selectedNode.type === 'bar' || selectedNode.type === 'slider' || selectedNode.type === 'arc' || selectedNode.type === 'spinbox' || selectedNode.type === 'meter' || selectedNode.type === 'scale') && (
                 <div className="property-group">
                     <h3>Value Range</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -904,6 +993,107 @@ export const PropertiesPanel: React.FC = () => {
                             onChange={(e) => handleNumberProp('value', e.target.value)}
                         />
                     </div>
+                    {selectedNode.type === 'spinbox' && (
+                        <div style={{ borderTop: '0.5px solid var(--border-subtle)', paddingTop: '8px', marginTop: '6px' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(var(--text-muted))', marginBottom: '6px' }}>
+                                Spinbox Settings (LVGL 9)
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div className="prop-row" style={{ gridTemplateColumns: '50px 1fr', gap: '4px' }}>
+                                    <label>Digits</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={selectedNode.digits ?? 3}
+                                        onChange={(e) => handleNumberProp('digits', e.target.value)}
+                                    />
+                                </div>
+                                <div className="prop-row" style={{ gridTemplateColumns: '50px 1fr', gap: '4px' }}>
+                                    <label>Decimals</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="5"
+                                        value={selectedNode.decimal_places ?? 0}
+                                        onChange={(e) => handleNumberProp('decimal_places', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="prop-row" style={{ marginTop: '4px' }}>
+                                <label title="Index of digit to increment/decrement (0 = units, 1 = tens, etc.). Replaces legacy 'step' in LVGL 9.">Selected</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max={(selectedNode.digits ?? 3) - 1}
+                                    value={selectedNode.selected_digit ?? 0}
+                                    onChange={(e) => handleNumberProp('selected_digit', e.target.value)}
+                                />
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: 'hsl(var(--text-dim))', marginTop: '2px' }}>
+                                Step value: 10<sup>{selectedNode.selected_digit ?? 0}</sup> ({Math.pow(10, selectedNode.selected_digit ?? 0)})
+                            </div>
+                        </div>
+                    )}
+                    {selectedNode.type === 'scale' && (
+                        <div style={{ borderTop: '0.5px solid var(--border-subtle)', paddingTop: '8px', marginTop: '6px' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'hsl(var(--text-muted))', marginBottom: '6px' }}>
+                                Scale Settings (LVGL 9)
+                            </div>
+                            <div className="prop-row">
+                                <label>Mode</label>
+                                <select
+                                    value={selectedNode.scale_mode || 'ROUND_OUTER'}
+                                    onChange={(e) => handlePropChange('scale_mode', e.target.value)}
+                                >
+                                    <option value="ROUND_OUTER">Round Outer</option>
+                                    <option value="ROUND_INNER">Round Inner</option>
+                                    <option value="HORIZONTAL_TOP">Horizontal Top</option>
+                                    <option value="HORIZONTAL_BOTTOM">Horizontal Bottom</option>
+                                    <option value="VERTICAL_LEFT">Vertical Left</option>
+                                    <option value="VERTICAL_RIGHT">Vertical Right</option>
+                                </select>
+                            </div>
+                            {(!selectedNode.scale_mode || selectedNode.scale_mode.startsWith('ROUND')) && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '4px' }}>
+                                    <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                                        <label>Angle</label>
+                                        <input
+                                            type="number"
+                                            value={selectedNode.angle_range ?? 270}
+                                            onChange={(e) => handleNumberProp('angle_range', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                                        <label>Rot</label>
+                                        <input
+                                            type="number"
+                                            value={selectedNode.rotation ?? 135}
+                                            onChange={(e) => handleNumberProp('rotation', e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '4px' }}>
+                                <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                                    <label>Ticks</label>
+                                    <input
+                                        type="number"
+                                        value={selectedNode.ticks_count ?? 11}
+                                        onChange={(e) => handleNumberProp('ticks_count', e.target.value)}
+                                    />
+                                </div>
+                                <div className="prop-row" style={{ gridTemplateColumns: '40px 1fr', gap: '4px' }}>
+                                    <label>Stride</label>
+                                    <input
+                                        type="number"
+                                        value={selectedNode.major_ticks_stride ?? 2}
+                                        onChange={(e) => handleNumberProp('major_ticks_stride', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {selectedNode.type === 'arc' && (
                         <>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

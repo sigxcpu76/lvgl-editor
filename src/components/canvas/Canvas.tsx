@@ -129,18 +129,32 @@ export const Canvas: React.FC = () => {
                     type: item.type as any,
                     name: `${item.type}_${Date.now().toString().slice(-4)}`,
                     x, y,
-                    width: item.type === 'slider' || item.type === 'bar' ? 150 : 100,
-                    height: item.type === 'slider' || item.type === 'bar' ? 20 : 40,
+                    width: (item.type === 'slider' || item.type === 'bar') ? 150 : (item.type === 'meter' || item.type === 'scale' || item.type === 'tabview' ? 200 : (item.type === 'image' ? 100 : 100)),
+                    height: (item.type === 'slider' || item.type === 'bar') ? 20 : (item.type === 'meter' || item.type === 'scale' ? 200 : (item.type === 'tabview' ? 180 : 40)),
                     text: item.type === 'label' || item.type === 'button' || item.type === 'checkbox' ? `${item.type}` : undefined,
                     options: item.type === 'dropdown' || item.type === 'roller' ? "Option 1\nOption 2\nOption 3" : undefined,
                     // Defaults for specific types
-                    range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox') ? 0 : undefined,
-                    range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox') ? 100 : undefined,
-                    value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox') ? 50 : undefined,
+                    range_min: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox' || item.type === 'scale') ? 0 : undefined,
+                    range_max: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox' || item.type === 'scale') ? 100 : undefined,
+                    value: (item.type === 'slider' || item.type === 'bar' || item.type === 'arc' || item.type === 'spinbox' || item.type === 'scale') ? 50 : undefined,
                     start_angle: item.type === 'arc' ? 135 : undefined,
                     end_angle: item.type === 'arc' ? 45 : undefined,
+                    scale_mode: item.type === 'scale' ? ('ROUND_OUTER' as const) : undefined,
+                    angle_range: item.type === 'scale' ? 270 : undefined,
+                    rotation: item.type === 'scale' ? 135 : undefined,
+                    digits: item.type === 'spinbox' ? 3 : undefined,
+                    decimal_places: item.type === 'spinbox' ? 0 : undefined,
+                    selected_digit: item.type === 'spinbox' ? 0 : undefined,
+                    scale: item.type === 'image' ? 1.0 : undefined,
                     checkable: (item.type === 'switch' || item.type === 'checkbox') ? true : undefined,
-                    children: []
+                    children: item.type === 'tabview' ? [{
+                        id: uuidv4(),
+                        type: 'tab' as any,
+                        name: 'tab_1',
+                        text: 'Tab 1',
+                        x: 0, y: 0, width: '100%', height: '100%',
+                        children: []
+                    }] : []
                 } : {
                     id: uuidv4(),
                     type: 'label' as any,

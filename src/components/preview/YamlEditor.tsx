@@ -65,14 +65,14 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({ yaml, onClose, onDownloa
 
                 const suggestions = [
                     // Top level / Common keywords
-                    ...['lvgl', 'pages', 'widgets', 'style_definitions', 'id', 'x', 'y', 'width', 'height', 'text', 'align', 'styles', 'layout', 'type'].map(k => ({
+                    ...['lvgl', 'pages', 'widgets', 'tabs', 'rotation', 'style_definitions', 'id', 'x', 'y', 'width', 'height', 'text', 'align', 'styles', 'layout', 'type', 'selected_digit', 'digits', 'decimal_places', 'mode', 'angle_range', 'range_from', 'range_to', 'scale', 'scale_x', 'scale_y'].map(k => ({
                         label: k,
                         kind: monaco.languages.CompletionItemKind.Keyword,
                         insertText: k + ': ',
                         range,
                     })),
                     // Widget types
-                    ...['page', 'label', 'button', 'obj', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led'].map(t => ({
+                    ...['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led', 'image', 'meter', 'scale', 'tabview', 'tab'].map(t => ({
                         label: t,
                         kind: monaco.languages.CompletionItemKind.Class,
                         insertText: t,

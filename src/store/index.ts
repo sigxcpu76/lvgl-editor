@@ -138,6 +138,7 @@ export const useStore = create<EditorState>((set) => ({
         ],
         zoom: 1.0,
         viewMode: '1:1',
+        rotation: 0,
     },
     gridConfig: {
         enabled: true,
@@ -412,6 +413,11 @@ export const useStore = create<EditorState>((set) => ({
     setViewMode: (viewMode) =>
         set((state) => ({
             canvasConfig: { ...state.canvasConfig, viewMode }
+        })),
+
+    setRotation: (rotation) =>
+        set((state) => ({
+            canvasConfig: { ...state.canvasConfig, rotation }
         })),
 
     setGridConfig: (config) =>

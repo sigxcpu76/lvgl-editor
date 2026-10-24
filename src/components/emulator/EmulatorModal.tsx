@@ -23,10 +23,14 @@ export const EmulatorModal: React.FC = () => {
 
     if (!emulatorOpen) return null;
 
+    const isRotated90or270 = canvasConfig.rotation === 90 || canvasConfig.rotation === 270;
+    const effectiveWidth = isRotated90or270 ? canvasConfig.height : canvasConfig.width;
+    const effectiveHeight = isRotated90or270 ? canvasConfig.width : canvasConfig.height;
+
     const scale = Math.min(
         1,
-        containerSize.width / canvasConfig.width,
-        containerSize.height / canvasConfig.height
+        (containerSize.width - 60) / effectiveWidth,
+        (containerSize.height - 140) / effectiveHeight
     );
 
     return (
@@ -64,36 +68,61 @@ export const EmulatorModal: React.FC = () => {
                     </div>
                     <div>
                         <div style={{ fontWeight: 700, fontSize: '1.1rem', lineHeight: 1 }}>Live Emulator</div>
-                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: '2px' }}>{canvasConfig.width}x{canvasConfig.height} • LVGL Logic</div>
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: '2px' }}>{canvasConfig.width}x{canvasConfig.height} {canvasConfig.rotation ? `• ${canvasConfig.rotation}° Rotation` : ''} • ESPHome LVGL 9</div>
                     </div>
                 </div>
-                <button
-                    onClick={() => setEmulatorOpen(false)}
-                    style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: '#aaa',
-                        fontSize: '1.2rem',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.color = '#fff';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.color = '#aaa';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                    }}
-                >
-                    <i className="mdi mdi-close"></i>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                        onClick={() => {
+                            const nextRot: Record<number, 0 | 90 | 180 | 270> = { 0: 90, 90: 180, 180: 270, 270: 0 };
+                            useStore.getState().setRotation(nextRot[canvasConfig.rotation ?? 0] ?? 0);
+                        }}
+                        style={{
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: '#aaa',
+                            fontSize: '1rem',
+                            cursor: 'pointer',
+                            padding: '0 12px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                        title="Rotate Display (LVGL 9)"
+                    >
+                        <i className="mdi mdi-screen-rotation"></i>
+                        <span style={{ fontSize: '0.75rem' }}>{canvasConfig.rotation ?? 0}°</span>
+                    </button>
+                    <button
+                        onClick={() => setEmulatorOpen(false)}
+                        style={{
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: '#aaa',
+                            fontSize: '1.2rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.color = '#fff';
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.color = '#aaa';
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        }}
+                    >
+                        <i className="mdi mdi-close"></i>
+                    </button>
+                </div>
             </div>
 
             <div className="emulator-viewport-wrapper" style={{
@@ -112,7 +141,9 @@ export const EmulatorModal: React.FC = () => {
                     position: 'relative',
                     overflow: 'hidden',
                     borderRadius: '4px',
-                    boxSizing: 'content-box' // CRITICAL: Ensure bezel doesn't eat into screen size
+                    boxSizing: 'content-box', // CRITICAL: Ensure bezel doesn't eat into screen size
+                    transform: canvasConfig.rotation ? `rotate(${canvasConfig.rotation}deg)` : undefined,
+                    transition: 'transform 0.3s ease'
                 }}>
                     {widgets.map(node => (
                         <EmulatorWidget key={node.id} node={node} isRoot={true} />

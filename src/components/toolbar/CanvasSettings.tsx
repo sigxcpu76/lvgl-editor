@@ -4,7 +4,7 @@ import { useStore } from '../../store';
 import { Resolution } from '../../types';
 
 export const CanvasSettings: React.FC = () => {
-    const { canvasConfig, setCanvasSize, addCanvasPreset, setZoom, setViewMode, gridConfig, setGridConfig, theme } = useStore();
+    const { canvasConfig, setCanvasSize, addCanvasPreset, setZoom, setViewMode, setRotation, gridConfig, setGridConfig, theme } = useStore();
     const [customWidth, setCustomWidth] = useState(canvasConfig.width);
     const [customHeight, setCustomHeight] = useState(canvasConfig.height);
     const [showAddPreset, setShowAddPreset] = useState(false);
@@ -72,6 +72,21 @@ export const CanvasSettings: React.FC = () => {
                                             {canvasConfig.presets.map(p => (
                                                 <option key={p.name} value={p.name}>{p.name} ({p.width}x{p.height})</option>
                                             ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="setting-group" style={{ width: '100%' }}>
+                                        <label style={{ width: '100px' }}>Rotation (LVGL 9)</label>
+                                        <select
+                                            value={canvasConfig.rotation ?? 0}
+                                            onChange={(e) => setRotation(parseInt(e.target.value) as 0 | 90 | 180 | 270)}
+                                            className="input-select"
+                                            style={{ flex: 1 }}
+                                        >
+                                            <option value={0}>0° (Normal)</option>
+                                            <option value={90}>90° (Clockwise)</option>
+                                            <option value={180}>180° (Inverted)</option>
+                                            <option value={270}>270° (Counter-Clockwise)</option>
                                         </select>
                                     </div>
 
@@ -173,6 +188,16 @@ export const CanvasSettings: React.FC = () => {
                 title="Toggle Snap to Grid"
             >
                 <span className="mdi mdi-magnet" />
+            </button>
+            <button
+                className={`btn-icon ${canvasConfig.rotation ? 'active' : ''}`}
+                onClick={() => {
+                    const nextRot: Record<number, 0 | 90 | 180 | 270> = { 0: 90, 90: 180, 180: 270, 270: 0 };
+                    setRotation(nextRot[canvasConfig.rotation ?? 0] ?? 0);
+                }}
+                title={`Screen Rotation: ${canvasConfig.rotation ?? 0}° (Click to rotate)`}
+            >
+                <span className="mdi mdi-screen-rotation" />
             </button>
             <input
                 type="number"

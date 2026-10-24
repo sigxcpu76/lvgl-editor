@@ -1,4 +1,4 @@
-export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image' | 'meter' | 'tabview' | 'tab';
+export type WidgetType = 'page' | 'object' | 'button' | 'label' | 'arc' | 'bar' | 'slider' | 'switch' | 'checkbox' | 'spinbox' | 'dropdown' | 'roller' | 'textarea' | 'led' | 'image' | 'meter' | 'scale' | 'tabview' | 'tab';
 
 export interface StyleProperties {
     bg_color?: string;
@@ -104,6 +104,31 @@ export interface WidgetNode {
     end_angle?: number;
     meter_scales?: MeterScale[];
 
+    // LVGL 9 - Scale Widget Props
+    scale_mode?: 'ROUND_OUTER' | 'ROUND_INNER' | 'HORIZONTAL_TOP' | 'HORIZONTAL_BOTTOM' | 'VERTICAL_LEFT' | 'VERTICAL_RIGHT';
+    angle_range?: number;
+    ticks_count?: number;
+    ticks_length?: number;
+    ticks_width?: number;
+    major_ticks_stride?: number;
+    major_ticks_length?: number;
+    major_ticks_width?: number;
+    major_ticks_label_gap?: number;
+
+    // LVGL 9 - Spinbox Widget Props (selected_digit replaces legacy step)
+    digits?: number;
+    decimal_places?: number;
+    selected_digit?: number;
+    step?: number; // Legacy fallback
+
+    // LVGL 9 - Image & Transform Props
+    scale?: number;
+    scale_x?: number;
+    scale_y?: number;
+
+    // TabView Props
+    tab_position?: 'TOP' | 'BOTTOM' | 'LEFT' | 'RIGHT';
+
     layout?: {
         type: 'flex' | 'grid' | 'absolute';
         flex_flow?: 'row' | 'column' | 'row_wrap' | 'column_wrap';
@@ -159,6 +184,7 @@ export interface CanvasConfig {
     presets: Resolution[];
     zoom: number;
     viewMode: '1:1' | 'fit';
+    rotation?: 0 | 90 | 180 | 270;
 }
 
 export interface EditorState {
@@ -192,6 +218,7 @@ export interface EditorState {
     addCanvasPreset: (preset: Resolution) => void;
     setZoom: (zoom: number) => void;
     setViewMode: (mode: '1:1' | 'fit') => void;
+    setRotation: (rotation: 0 | 90 | 180 | 270) => void;
     theme: 'dark' | 'light';
     setTheme: (theme: 'dark' | 'light') => void;
     rawYaml: string | null;

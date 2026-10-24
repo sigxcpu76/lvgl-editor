@@ -133,7 +133,7 @@ function App() {
             const content = event.target?.result as string;
             if (content) {
                 try {
-                    const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs, global_styles: loadedStyles } = yamlEngine.parse(content);
+                    const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs, global_styles: loadedStyles, rotation: loadedRotation } = yamlEngine.parse(content);
                     if (loadedWidgets && loadedWidgets.length > 0) {
                         loadState(loadedWidgets);
                         if (loadedAssets && loadedAssets.length > 0) {
@@ -144,6 +144,9 @@ function App() {
                         }
                         if (loadedStyles) {
                             useStore.getState().setGlobalStyles(loadedStyles);
+                        }
+                        if (loadedRotation !== undefined) {
+                            useStore.getState().setRotation(loadedRotation);
                         }
                         setRawYaml(content);
                     } else {
@@ -159,8 +162,8 @@ function App() {
     };
 
     const handleExport = () => {
-        const { widgets, assets, global_styles, substitutions } = useStore.getState();
-        const generatedYaml = yamlEngine.generate(widgets, assets, global_styles, substitutions);
+        const { widgets, assets, global_styles, substitutions, canvasConfig } = useStore.getState();
+        const generatedYaml = yamlEngine.generate(widgets, assets, global_styles, substitutions, { rotation: canvasConfig.rotation });
         setGeneratedYaml(generatedYaml);
         setShowPreview(true);
     };
@@ -188,7 +191,7 @@ function App() {
 
     const handleApplyYaml = (newYaml: string) => {
         try {
-            const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs, global_styles: loadedStyles } = yamlEngine.parse(newYaml);
+            const { widgets: loadedWidgets, assets: loadedAssets, substitutions: loadedSubs, global_styles: loadedStyles, rotation: loadedRotation } = yamlEngine.parse(newYaml);
             if (loadedWidgets && loadedWidgets.length > 0) {
                 loadState(loadedWidgets);
                 useStore.getState().setSelectedIds([]); // Clear selection as IDs have changed
@@ -200,6 +203,9 @@ function App() {
                 }
                 if (loadedStyles) {
                     useStore.getState().setGlobalStyles(loadedStyles);
+                }
+                if (loadedRotation !== undefined) {
+                    useStore.getState().setRotation(loadedRotation);
                 }
                 setRawYaml(newYaml);
                 setShowPreview(false);

@@ -83,6 +83,7 @@ export const WidgetPalette: React.FC = () => {
                 { type: 'arc', label: 'Arc', icon: 'circle-outline' },
                 { type: 'led', label: 'LED', icon: 'led-on' },
                 { type: 'meter', label: 'Meter', icon: 'gauge' },
+                { type: 'scale', label: 'Scale (LVGL 9)', icon: 'speedometer' },
             ]
         }
     ];

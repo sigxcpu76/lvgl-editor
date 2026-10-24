@@ -19,7 +19,7 @@ export class YamlEngine {
      * Parses the full ESPHome YAML string.
      * Extracts the 'lvgl' section from 'display' or top-level.
      */
-    parse(yamlString: string): { widgets: WidgetNode[], assets: any[], substitutions: Record<string, string>, global_styles: Record<string, StyleProperties> } {
+    parse(yamlString: string): { widgets: WidgetNode[], assets: any[], substitutions: Record<string, string>, global_styles: Record<string, StyleProperties>, rotation?: 0 | 90 | 180 | 270 } {
         try {
             this.yamlDoc = parseDocument(yamlString);
             if (!this.yamlDoc || !this.yamlDoc.contents) return { widgets: [], assets: [], substitutions: {}, global_styles: {} };
@@ -122,6 +122,36 @@ export class YamlEngine {
                 return { widgets: [], assets, substitutions: subsRecord, global_styles: {} };
             }
 
+            // Extract LVGL 9 native rotation (or legacy display rotation)
+            let rotation: 0 | 90 | 180 | 270 | undefined;
+            if (typeof lvglNode.has === 'function' && lvglNode.has('rotation')) {
+                const rot = Number(this.resolveText(lvglNode.get('rotation')));
+                if (rot === 0 || rot === 90 || rot === 180 || rot === 270) {
+                    rotation = rot;
+                }
+            } else {
+                const displayNode = this.yamlDoc.get('display') as any;
+                if (displayNode) {
+                    let dispRot: any = null;
+                    if (displayNode.items) {
+                        for (const item of displayNode.items) {
+                            if (typeof item.get === 'function' && item.has('rotation')) {
+                                dispRot = item.get('rotation');
+                                break;
+                            }
+                        }
+                    } else if (typeof displayNode.get === 'function' && displayNode.has('rotation')) {
+                        dispRot = displayNode.get('rotation');
+                    }
+                    if (dispRot !== null) {
+                        const rot = Number(this.resolveText(dispRot));
+                        if (rot === 0 || rot === 90 || rot === 180 || rot === 270) {
+                            rotation = rot;
+                        }
+                    }
+                }
+            }
+
             // 3. Resolve style definitions
             if (typeof lvglNode.has === 'function' && lvglNode.has('style_definitions')) {
                 const styleDefs = lvglNode.get('style_definitions');
@@ -152,7 +182,7 @@ export class YamlEngine {
             this.styles.forEach((v, k) => globalStyles[k] = v);
 
             this.assets = assets;
-            return { widgets, assets, substitutions: subsRecord, global_styles: globalStyles };
+            return { widgets, assets, substitutions: subsRecord, global_styles: globalStyles, rotation };
         } catch (e) {
             console.error("YAML Parse Error:", e);
             return { widgets: [], assets: [], substitutions: {}, global_styles: {} };
@@ -239,7 +269,7 @@ export class YamlEngine {
     }
 
     private isWidgetType(key: string): boolean {
-        const knownTypes = ['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led', 'image', 'img', 'meter'];
+        const knownTypes = ['page', 'label', 'button', 'btn', 'obj', 'object', 'arc', 'bar', 'slider', 'switch', 'checkbox', 'spinbox', 'dropdown', 'roller', 'textarea', 'led', 'image', 'img', 'meter', 'scale', 'tabview', 'tab'];
         return knownTypes.includes(key);
     }
 
@@ -266,7 +296,7 @@ export class YamlEngine {
             'slider': 'slider', 'switch': 'switch', 'checkbox': 'checkbox',
             'spinbox': 'spinbox', 'dropdown': 'dropdown', 'roller': 'roller',
             'textarea': 'textarea', 'led': 'led', 'image': 'image', 'img': 'image',
-            'meter': 'meter'
+            'meter': 'meter', 'scale': 'scale', 'tabview': 'tabview', 'tab': 'tab'
         };
 
         let foundType: WidgetType | null = forceType || null;
@@ -348,6 +378,15 @@ export class YamlEngine {
         let rotation: number | undefined;
         let start_angle: number | undefined;
         let end_angle: number | undefined;
+        let angle_range: number | undefined;
+        let scale_mode: any;
+        let digits: number | undefined;
+        let decimal_places: number | undefined;
+        let selected_digit: number | undefined;
+        let scale_factor: number | undefined;
+        let scale_x: number | undefined;
+        let scale_y: number | undefined;
+        let tab_position: any;
         let src: string | undefined;
         let style_references_node: StyleReference[] | undefined;
         let meter_scales: MeterScale[] | undefined;
@@ -470,6 +509,33 @@ export class YamlEngine {
         if (hasKey(finalPropsNode, 'rotation')) rotation = Number(this.resolveText(getKey(finalPropsNode, 'rotation')));
         if (hasKey(finalPropsNode, 'start_angle')) start_angle = Number(this.resolveText(getKey(finalPropsNode, 'start_angle')));
         if (hasKey(finalPropsNode, 'end_angle')) end_angle = Number(this.resolveText(getKey(finalPropsNode, 'end_angle')));
+        if (hasKey(finalPropsNode, 'angle_range')) angle_range = Number(this.resolveText(getKey(finalPropsNode, 'angle_range')));
+
+        // LVGL 9 Scale & Range properties
+        if (hasKey(finalPropsNode, 'mode')) scale_mode = this.resolveText(getKey(finalPropsNode, 'mode')).toUpperCase() as any;
+        if (hasKey(finalPropsNode, 'range_from')) range_min = Number(this.resolveText(getKey(finalPropsNode, 'range_from')));
+        if (hasKey(finalPropsNode, 'range_to')) range_max = Number(this.resolveText(getKey(finalPropsNode, 'range_to')));
+
+        // LVGL 9 Spinbox properties (selected_digit replaces step)
+        if (hasKey(finalPropsNode, 'digits')) digits = Number(this.resolveText(getKey(finalPropsNode, 'digits')));
+        if (hasKey(finalPropsNode, 'decimal_places')) decimal_places = Number(this.resolveText(getKey(finalPropsNode, 'decimal_places')));
+        if (hasKey(finalPropsNode, 'selected_digit')) selected_digit = Number(this.resolveText(getKey(finalPropsNode, 'selected_digit')));
+        if (hasKey(finalPropsNode, 'step')) {
+            const stepVal = Number(this.resolveText(getKey(finalPropsNode, 'step')));
+            if (selected_digit === undefined && !isNaN(stepVal) && stepVal > 0) {
+                selected_digit = Math.max(0, Math.round(Math.log10(stepVal)));
+            }
+        }
+
+        // LVGL 9 Image transformations
+        if (hasKey(finalPropsNode, 'scale')) scale_factor = Number(this.resolveText(getKey(finalPropsNode, 'scale')));
+        if (hasKey(finalPropsNode, 'zoom') && scale_factor === undefined) scale_factor = Number(this.resolveText(getKey(finalPropsNode, 'zoom')));
+        if (hasKey(finalPropsNode, 'scale_x')) scale_x = Number(this.resolveText(getKey(finalPropsNode, 'scale_x')));
+        if (hasKey(finalPropsNode, 'scale_y')) scale_y = Number(this.resolveText(getKey(finalPropsNode, 'scale_y')));
+
+        // TabView properties
+        if (hasKey(finalPropsNode, 'position')) tab_position = this.resolveText(getKey(finalPropsNode, 'position')).toUpperCase() as any;
+        if (hasKey(finalPropsNode, 'tab_position')) tab_position = this.resolveText(getKey(finalPropsNode, 'tab_position')).toUpperCase() as any;
 
         if (hasKey(finalPropsNode, 'range')) {
             const rNode = getKey(finalPropsNode, 'range');
@@ -511,6 +577,36 @@ export class YamlEngine {
 
         Object.assign(styles, this.parseStyles(finalPropsNode));
 
+        // Parse tabview tabs sequence
+        if (foundType === 'tabview' && hasKey(finalPropsNode, 'tabs')) {
+            const tabsNode = getKey(finalPropsNode, 'tabs');
+            if (tabsNode && tabsNode.items) {
+                for (const tabItem of tabsNode.items) {
+                    const tabTitle = this.resolveText(getKey(tabItem, 'name') || getKey(tabItem, 'id') || 'Tab');
+                    const tabId = this.resolveText(getKey(tabItem, 'id') || tabTitle.toLowerCase().replace(/\s+/g, '_'));
+                    const tabChildWidgets: WidgetNode[] = [];
+                    const tabWidgetsNode = getKey(tabItem, 'widgets');
+                    if (tabWidgetsNode && tabWidgetsNode.items) {
+                        for (const cItem of tabWidgetsNode.items) {
+                            const parsed = this.parseWidgetNode(cItem);
+                            if (parsed) tabChildWidgets.push(parsed);
+                        }
+                    }
+                    children.push({
+                        id: uuidv4(),
+                        type: 'tab',
+                        name: tabId,
+                        text: tabTitle,
+                        x: 0,
+                        y: 0,
+                        width: '100%',
+                        height: '100%',
+                        children: tabChildWidgets
+                    });
+                }
+            }
+        }
+
         const childrenKeys = ['widgets', 'children', 'pages'];
         for (const cKey of childrenKeys) {
             if (hasKey(finalPropsNode, cKey)) {
@@ -529,8 +625,8 @@ export class YamlEngine {
             grid_cell_column_pos, grid_cell_column_span, grid_cell_row_pos, grid_cell_row_span,
             grid_cell_x_align, grid_cell_y_align, class_names, options,
             hidden, clickable, checkable, checked, long_mode, min_value, max_value, value, range_min, range_max,
-            rotation, start_angle, end_angle, src, style_references: style_references_node, actions,
-            meter_scales
+            rotation, start_angle, end_angle, angle_range, src, style_references: style_references_node, actions,
+            meter_scales, scale_mode, digits, decimal_places, selected_digit, scale: scale_factor, scale_x, scale_y, tab_position
         } as any;
     }
 
@@ -591,7 +687,13 @@ export class YamlEngine {
         return s;
     }
 
-    generate(widgets: WidgetNode[], assets: any[], global_styles: Record<string, StyleProperties> = {}, substitutions: Record<string, string> = {}): string {
+    generate(
+        widgets: WidgetNode[],
+        assets: any[],
+        global_styles: Record<string, StyleProperties> = {},
+        substitutions: Record<string, string> = {},
+        options?: { rotation?: 0 | 90 | 180 | 270 }
+    ): string {
         if (!this.yamlDoc) this.yamlDoc = parseDocument(DEFAULT_ESPHOME_YAML);
         const rootContent = this.yamlDoc.contents as any;
 
@@ -636,6 +738,40 @@ export class YamlEngine {
         const lvglNode = this.findLvglNode(rootContent, 0);
 
         if (lvglNode) {
+            // ESPHome LVGL 9 - Native Rotation
+            if (options?.rotation !== undefined && options.rotation !== 0) {
+                lvglNode.set('rotation', options.rotation);
+            } else if (options?.rotation === 0 && typeof lvglNode.has === 'function' && lvglNode.has('rotation')) {
+                lvglNode.delete('rotation');
+            }
+
+            // Remove legacy display-level rotation & touchscreen transform if present (LVGL 9 migration)
+            const displayNode = rootContent.get('display') as any;
+            if (displayNode) {
+                if (displayNode.items) {
+                    for (const item of displayNode.items) {
+                        if (typeof item.delete === 'function') {
+                            item.delete('rotation');
+                        }
+                    }
+                } else if (typeof displayNode.delete === 'function') {
+                    displayNode.delete('rotation');
+                }
+            }
+
+            const touchNode = rootContent.get('touchscreen') as any;
+            if (touchNode) {
+                if (touchNode.items) {
+                    for (const item of touchNode.items) {
+                        if (typeof item.delete === 'function') {
+                            item.delete('transform');
+                        }
+                    }
+                } else if (typeof touchNode.delete === 'function') {
+                    touchNode.delete('transform');
+                }
+            }
+
             if (Object.keys(global_styles).length > 0) {
                 const styleDefs = Object.entries(global_styles).map(([id, st]) => {
                     const yamlStyle: any = { id };
@@ -716,6 +852,35 @@ export class YamlEngine {
 
         if (w.range_min !== undefined || w.range_max !== undefined) {
             props.range = { min: w.range_min ?? 0, max: w.range_max ?? 100 };
+        }
+
+        // LVGL 9 - Scale Widget
+        if (w.type === 'scale') {
+            if (w.scale_mode) props.mode = w.scale_mode;
+            if (w.range_min !== undefined) props.range_from = w.range_min;
+            else if (w.min_value !== undefined) props.range_from = w.min_value;
+            if (w.range_max !== undefined) props.range_to = w.range_max;
+            else if (w.max_value !== undefined) props.range_to = w.max_value;
+            if (w.rotation !== undefined) props.rotation = w.rotation;
+            if (w.angle_range !== undefined) props.angle_range = w.angle_range;
+            if (w.value !== undefined) props.value = w.value;
+        }
+
+        // LVGL 9 - Spinbox Widget (selected_digit replaces legacy step)
+        if (w.type === 'spinbox') {
+            if (w.range_min !== undefined) props.range_from = w.range_min;
+            if (w.range_max !== undefined) props.range_to = w.range_max;
+            if (w.digits !== undefined) props.digits = w.digits;
+            if (w.decimal_places !== undefined) props.decimal_places = w.decimal_places;
+            if (w.selected_digit !== undefined) props.selected_digit = w.selected_digit;
+        }
+
+        // LVGL 9 - Image Widget Transformations
+        if (w.type === 'image') {
+            if (w.scale !== undefined) props.scale = w.scale;
+            if (w.scale_x !== undefined) props.scale_x = w.scale_x;
+            if (w.scale_y !== undefined) props.scale_y = w.scale_y;
+            if (w.rotation !== undefined) props.rotation = w.rotation;
         }
 
         if (w.meter_scales && w.meter_scales.length > 0) {
@@ -805,11 +970,19 @@ export class YamlEngine {
 
         if (w.actions) Object.assign(props, w.actions);
 
-        if (w.children && w.children.length > 0) {
+        // TabView vs standard widget children
+        if (w.type === 'tabview') {
+            if (w.tab_position) props.position = w.tab_position;
+            props.tabs = (w.children || []).map(tab => ({
+                name: this.formatText(tab.text || tab.name || 'Tab'),
+                id: tab.name,
+                widgets: (tab.children || []).map(c => this.buildYamlWidget(c))
+            }));
+        } else if (w.children && w.children.length > 0) {
             props.widgets = w.children.map(c => this.buildYamlWidget(c));
         }
 
-        const tag = w.type === 'object' ? 'obj' : (w.type === 'button' ? 'btn' : w.type);
+        const tag = w.type === 'object' ? 'obj' : (w.type === 'button' ? 'button' : w.type);
         return { [tag]: props };
     }
 
